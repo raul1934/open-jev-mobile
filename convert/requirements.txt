@@ -1,0 +1,13 @@
+# PC only (conversion + verification). The tablet needs none of this.
+# CPU-only PyTorch is enough:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.6
+transformers>=5.0
+safetensors>=0.5
+huggingface_hub>=0.34
+numpy
+sentencepiece
+protobuf
+jinja2
+# verify.py runs the original Open-Jev model:
+peft>=0.17
+accelerate>=1.0

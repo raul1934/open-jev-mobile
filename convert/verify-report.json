@@ -1,0 +1,109 @@
+{
+  "requests": [
+    "configs/example-request.json",
+    "examples/recipes/citation_check.json",
+    "examples/recipes/classification.json",
+    "examples/recipes/date_extraction.json",
+    "examples/recipes/entity_alignment.json",
+    "examples/recipes/features.json",
+    "examples/recipes/function_calling.json",
+    "examples/recipes/guardrails.json",
+    "examples/recipes/hierarchical_classification.json",
+    "examples/recipes/rag_filter.json",
+    "examples/recipes/rerank.json",
+    "examples/recipes/semantic_search.json"
+  ],
+  "results": [
+    {
+      "gguf": "open-jev-2b-F16.gguf",
+      "bytes": 3775708640,
+      "questions": 25,
+      "token_mismatches": 0,
+      "max_abs_logit_diff": 0.0825,
+      "max_abs_probability_diff": 0.011,
+      "mean_abs_probability_diff": 0.0026,
+      "median_abs_probability_diff": 0.0011,
+      "top_answer_agreement": "25/25",
+      "gguf_seconds": 73.9,
+      "reference_seconds": 379.2
+    },
+    {
+      "gguf": "open-jev-2b-Q8_0.gguf",
+      "bytes": 2012012000,
+      "questions": 25,
+      "token_mismatches": 0,
+      "max_abs_logit_diff": 0.3424,
+      "max_abs_probability_diff": 0.0414,
+      "mean_abs_probability_diff": 0.0072,
+      "median_abs_probability_diff": 0.0026,
+      "top_answer_agreement": "25/25",
+      "gguf_seconds": 88.0,
+      "reference_seconds": 379.2
+    },
+    {
+      "gguf": "open-jev-2b-Q6_K.gguf",
+      "bytes": 1556390368,
+      "questions": 25,
+      "token_mismatches": 0,
+      "max_abs_logit_diff": 0.4284,
+      "max_abs_probability_diff": 0.0593,
+      "mean_abs_probability_diff": 0.012,
+      "median_abs_probability_diff": 0.0043,
+      "top_answer_agreement": "25/25",
+      "gguf_seconds": 84.0,
+      "reference_seconds": 379.2
+    },
+    {
+      "gguf": "open-jev-2b-Q5_K_M-E8.gguf",
+      "bytes": 1534287328,
+      "questions": 25,
+      "token_mismatches": 0,
+      "max_abs_logit_diff": 0.652,
+      "max_abs_probability_diff": 0.0846,
+      "mean_abs_probability_diff": 0.0221,
+      "median_abs_probability_diff": 0.0149,
+      "top_answer_agreement": "25/25",
+      "gguf_seconds": 97.6,
+      "reference_seconds": 379.2
+    },
+    {
+      "gguf": "open-jev-2b-Q5_K_M.gguf",
+      "bytes": 1411120608,
+      "questions": 25,
+      "token_mismatches": 0,
+      "max_abs_logit_diff": 0.5583,
+      "max_abs_probability_diff": 0.0781,
+      "mean_abs_probability_diff": 0.0197,
+      "median_abs_probability_diff": 0.0164,
+      "top_answer_agreement": "25/25",
+      "gguf_seconds": 89.6,
+      "reference_seconds": 379.2
+    },
+    {
+      "gguf": "open-jev-2b-Q4_K_M-E8.gguf",
+      "bytes": 1397562848,
+      "questions": 25,
+      "token_mismatches": 0,
+      "max_abs_logit_diff": 2.3281,
+      "max_abs_probability_diff": 0.3156,
+      "mean_abs_probability_diff": 0.0467,
+      "median_abs_probability_diff": 0.017,
+      "top_answer_agreement": "25/25",
+      "gguf_seconds": 61.9,
+      "reference_seconds": 379.2
+    },
+    {
+      "gguf": "open-jev-2b-Q4_K_M.gguf",
+      "bytes": 1274396128,
+      "questions": 25,
+      "token_mismatches": 0,
+      "max_abs_logit_diff": 1.8394,
+      "max_abs_probability_diff": 0.2363,
+      "mean_abs_probability_diff": 0.0412,
+      "median_abs_probability_diff": 0.018,
+      "top_answer_agreement": "25/25",
+      "gguf_seconds": 61.5,
+      "reference_seconds": 379.2
+    }
+  ]
+}

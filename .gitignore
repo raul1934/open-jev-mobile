@@ -1,0 +1,8 @@
+build/
+models/*
+!models/.gitkeep
+convert/reference-logits.json
+*.server.log
+__pycache__/
+*.pyc
+.venv/
