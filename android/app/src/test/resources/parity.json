@@ -1,0 +1,692 @@
+{
+ "temperature": 1.518796342858676,
+ "cases": [
+  {
+   "name": "01-en-support-routing.json",
+   "request": {
+    "state": "A customer says: I was charged twice for one order. The service is working normally. There is no sign of unauthorized access.",
+    "questions": {
+     "route": {
+      "type": "choice",
+      "instructions": "Which team should handle this issue?",
+      "criteria": {
+       "billing": "Problems with charges, invoices, refunds or payments.",
+       "security": "Unauthorized access or account compromise.",
+       "technical": "Service unavailable or a software malfunction."
+      }
+     },
+     "refund_review": {
+      "type": "noul",
+      "instructions": "Does this message describe a duplicate charge?"
+     },
+     "urgency": {
+      "type": "score",
+      "instructions": "Assess the urgency using only the given evidence.",
+      "criteria": [
+       "Routine: no service disruption or active security compromise is reported.",
+       "Urgent: an ongoing service disruption is reported.",
+       "Critical: active unauthorized access is reported."
+      ]
+     }
+    }
+   },
+   "prompts": [
+    "Context:\nA customer says: I was charged twice for one order. The service is working normally. There is no sign of unauthorized access.\n\nQuestion: Which team should handle this issue?\nProposed answer: billing: Problems with charges, invoices, refunds or payments.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nA customer says: I was charged twice for one order. The service is working normally. There is no sign of unauthorized access.\n\nQuestion: Which team should handle this issue?\nProposed answer: security: Unauthorized access or account compromise.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nA customer says: I was charged twice for one order. The service is working normally. There is no sign of unauthorized access.\n\nQuestion: Which team should handle this issue?\nProposed answer: technical: Service unavailable or a software malfunction.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nA customer says: I was charged twice for one order. The service is working normally. There is no sign of unauthorized access.\n\nQuestion: Does this message describe a duplicate charge?\nIs the answer to this question yes? Answer Yes or No.",
+    "Context:\nA customer says: I was charged twice for one order. The service is working normally. There is no sign of unauthorized access.\n\nQuestion: Assess the urgency using only the given evidence.\nProposed answer: Routine: no service disruption or active security compromise is reported.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nA customer says: I was charged twice for one order. The service is working normally. There is no sign of unauthorized access.\n\nQuestion: Assess the urgency using only the given evidence.\nProposed answer: Urgent: an ongoing service disruption is reported.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nA customer says: I was charged twice for one order. The service is working normally. There is no sign of unauthorized access.\n\nQuestion: Assess the urgency using only the given evidence.\nProposed answer: Critical: active unauthorized access is reported.\nIs this proposed answer correct? Answer Yes or No."
+   ],
+   "answers": {
+    "route": {
+     "type": "choice",
+     "choice": "security",
+     "probabilities": {
+      "billing": 0.2312411547757247,
+      "security": 0.6351745833852196,
+      "technical": 0.13358426183905578
+     },
+     "confidence": 0.4527618750778294
+    },
+    "refund_review": {
+     "type": "noul",
+     "noul": 0.150384497983822
+    },
+    "urgency": {
+     "type": "score",
+     "score": 1.099727015014332,
+     "probabilities": {
+      "0": 0.3940410393777659,
+      "1": 0.11219090623013653,
+      "2": 0.49376805439209764
+     },
+     "confidence": 0.0,
+     "legend": {
+      "0": "Routine: no service disruption or active security compromise is reported.",
+      "1": "Urgent: an ongoing service disruption is reported.",
+      "2": "Critical: active unauthorized access is reported."
+     }
+    }
+   }
+  },
+  {
+   "name": "02-pt-atendimento.json",
+   "request": {
+    "state": "Mensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.",
+    "questions": {
+     "setor": {
+      "type": "choice",
+      "instructions": "Qual setor deve tratar esta mensagem?",
+      "criteria": {
+       "trocas": "Defeitos, trocas e devoluções de produtos.",
+       "financeiro": "Cobranças, boletos, reembolsos sem defeito no produto.",
+       "entregas": "Atrasos, extravios ou rastreio de pedidos.",
+       "vendas": "Dúvidas antes da compra, preços e disponibilidade."
+      }
+     },
+     "tem_numero_pedido": {
+      "type": "noul",
+      "instructions": "A mensagem informa o número do pedido?"
+     },
+     "urgencia": {
+      "type": "score",
+      "instructions": "Qual a urgência, usando só o que está escrito?",
+      "criteria": [
+       "Baixa: dúvida ou pedido sem prazo.",
+       "Média: problema com um produto, sem prejuízo imediato.",
+       "Alta: risco à segurança, cobrança indevida grande ou prazo vencendo hoje."
+      ]
+     }
+    }
+   },
+   "prompts": [
+    "Context:\nMensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.\n\nQuestion: Qual setor deve tratar esta mensagem?\nProposed answer: trocas: Defeitos, trocas e devoluções de produtos.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nMensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.\n\nQuestion: Qual setor deve tratar esta mensagem?\nProposed answer: financeiro: Cobranças, boletos, reembolsos sem defeito no produto.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nMensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.\n\nQuestion: Qual setor deve tratar esta mensagem?\nProposed answer: entregas: Atrasos, extravios ou rastreio de pedidos.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nMensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.\n\nQuestion: Qual setor deve tratar esta mensagem?\nProposed answer: vendas: Dúvidas antes da compra, preços e disponibilidade.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nMensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.\n\nQuestion: A mensagem informa o número do pedido?\nIs the answer to this question yes? Answer Yes or No.",
+    "Context:\nMensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.\n\nQuestion: Qual a urgência, usando só o que está escrito?\nProposed answer: Baixa: dúvida ou pedido sem prazo.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nMensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.\n\nQuestion: Qual a urgência, usando só o que está escrito?\nProposed answer: Média: problema com um produto, sem prejuízo imediato.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nMensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.\n\nQuestion: Qual a urgência, usando só o que está escrito?\nProposed answer: Alta: risco à segurança, cobrança indevida grande ou prazo vencendo hoje.\nIs this proposed answer correct? Answer Yes or No."
+   ],
+   "answers": {
+    "setor": {
+     "type": "choice",
+     "choice": "entregas",
+     "probabilities": {
+      "trocas": 0.06441719771425976,
+      "financeiro": 0.03032976119072965,
+      "entregas": 0.8877459892212936,
+      "vendas": 0.01750705187371711
+     },
+     "confidence": 0.8503279856283914
+    },
+    "tem_numero_pedido": {
+     "type": "noul",
+     "noul": 0.14423053487052645
+    },
+    "urgencia": {
+     "type": "score",
+     "score": 1.9551061447280407,
+     "probabilities": {
+      "0": 0.013963785289823064,
+      "1": 0.016966284692313146,
+      "2": 0.9690699300178638
+     },
+     "confidence": 0.9326592170920611,
+     "legend": {
+      "0": "Baixa: dúvida ou pedido sem prazo.",
+      "1": "Média: problema com um produto, sem prejuízo imediato.",
+      "2": "Alta: risco à segurança, cobrança indevida grande ou prazo vencendo hoje."
+     }
+    }
+   }
+  },
+  {
+   "name": "03-pt-avaliacao.json",
+   "request": {
+    "state": "Avaliação de um restaurante: A comida chegou quente e muito saborosa, mas a entrega atrasou quase uma hora e ninguém avisou. O atendente pediu desculpas e mandou um cupom de desconto.",
+    "questions": {
+     "sentimento": {
+      "type": "score",
+      "instructions": "Qual o sentimento geral da avaliação?",
+      "criteria": [
+       "Negativo: o cliente ficou insatisfeito no geral.",
+       "Misto: há pontos positivos e negativos importantes.",
+       "Positivo: o cliente ficou satisfeito no geral."
+      ]
+     },
+     "reclama_de_atraso": {
+      "type": "noul",
+      "instructions": "O cliente reclama de atraso na entrega?"
+     },
+     "elogia_comida": {
+      "type": "noul",
+      "instructions": "O cliente elogia a comida?",
+      "criteria": {
+       "true": "Há um elogio explícito ao sabor, temperatura ou qualidade da comida.",
+       "false": "A comida não é elogiada ou é criticada."
+      }
+     }
+    }
+   },
+   "prompts": [
+    "Context:\nAvaliação de um restaurante: A comida chegou quente e muito saborosa, mas a entrega atrasou quase uma hora e ninguém avisou. O atendente pediu desculpas e mandou um cupom de desconto.\n\nQuestion: Qual o sentimento geral da avaliação?\nProposed answer: Negativo: o cliente ficou insatisfeito no geral.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nAvaliação de um restaurante: A comida chegou quente e muito saborosa, mas a entrega atrasou quase uma hora e ninguém avisou. O atendente pediu desculpas e mandou um cupom de desconto.\n\nQuestion: Qual o sentimento geral da avaliação?\nProposed answer: Misto: há pontos positivos e negativos importantes.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nAvaliação de um restaurante: A comida chegou quente e muito saborosa, mas a entrega atrasou quase uma hora e ninguém avisou. O atendente pediu desculpas e mandou um cupom de desconto.\n\nQuestion: Qual o sentimento geral da avaliação?\nProposed answer: Positivo: o cliente ficou satisfeito no geral.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nAvaliação de um restaurante: A comida chegou quente e muito saborosa, mas a entrega atrasou quase uma hora e ninguém avisou. O atendente pediu desculpas e mandou um cupom de desconto.\n\nQuestion: O cliente reclama de atraso na entrega?\nIs the answer to this question yes? Answer Yes or No.",
+    "Context:\nAvaliação de um restaurante: A comida chegou quente e muito saborosa, mas a entrega atrasou quase uma hora e ninguém avisou. O atendente pediu desculpas e mandou um cupom de desconto.\n\nQuestion: O cliente elogia a comida?\nYes means: Há um elogio explícito ao sabor, temperatura ou qualidade da comida.\nNo means: A comida não é elogiada ou é criticada.\nIs the answer to this question yes? Answer Yes or No."
+   ],
+   "answers": {
+    "sentimento": {
+     "type": "score",
+     "score": 0.10547023663111289,
+     "probabilities": {
+      "0": 0.9033413390319798,
+      "1": 0.08784708530492763,
+      "2": 0.00881157566309263
+     },
+     "confidence": 0.8417946450533307,
+     "legend": {
+      "0": "Negativo: o cliente ficou insatisfeito no geral.",
+      "1": "Misto: há pontos positivos e negativos importantes.",
+      "2": "Positivo: o cliente ficou satisfeito no geral."
+     }
+    },
+    "reclama_de_atraso": {
+     "type": "noul",
+     "noul": 0.17623019182445643
+    },
+    "elogia_comida": {
+     "type": "noul",
+     "noul": 0.47183439372238395
+    }
+   }
+  },
+  {
+   "name": "04-pt-golpe-sms.json",
+   "request": {
+    "state": "SMS recebido: BANCO INFORMA: sua conta sera bloqueada hoje. Regularize seu cadastro em http://banco-seguro-atualiza.xyz/login e informe sua senha para evitar o bloqueio.",
+    "questions": {
+     "golpe": {
+      "type": "noul",
+      "instructions": "Esta mensagem tem sinais de golpe (phishing)?",
+      "criteria": {
+       "true": "Pede senha ou dados, cria urgência ou usa um link suspeito.",
+       "false": "Mensagem legítima, sem pedido de dados sensíveis nem link suspeito."
+      }
+     },
+     "tipo": {
+      "type": "choice",
+      "instructions": "Que tipo de mensagem é esta?",
+      "criteria": {
+       "phishing": "Tenta roubar senha, dados bancários ou pessoais.",
+       "promocao": "Propaganda ou oferta comercial.",
+       "aviso_legitimo": "Aviso real de um serviço, sem pedir dados sensíveis.",
+       "pessoal": "Conversa entre pessoas conhecidas."
+      }
+     }
+    }
+   },
+   "prompts": [
+    "Context:\nSMS recebido: BANCO INFORMA: sua conta sera bloqueada hoje. Regularize seu cadastro em http://banco-seguro-atualiza.xyz/login e informe sua senha para evitar o bloqueio.\n\nQuestion: Esta mensagem tem sinais de golpe (phishing)?\nYes means: Pede senha ou dados, cria urgência ou usa um link suspeito.\nNo means: Mensagem legítima, sem pedido de dados sensíveis nem link suspeito.\nIs the answer to this question yes? Answer Yes or No.",
+    "Context:\nSMS recebido: BANCO INFORMA: sua conta sera bloqueada hoje. Regularize seu cadastro em http://banco-seguro-atualiza.xyz/login e informe sua senha para evitar o bloqueio.\n\nQuestion: Que tipo de mensagem é esta?\nProposed answer: phishing: Tenta roubar senha, dados bancários ou pessoais.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nSMS recebido: BANCO INFORMA: sua conta sera bloqueada hoje. Regularize seu cadastro em http://banco-seguro-atualiza.xyz/login e informe sua senha para evitar o bloqueio.\n\nQuestion: Que tipo de mensagem é esta?\nProposed answer: promocao: Propaganda ou oferta comercial.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nSMS recebido: BANCO INFORMA: sua conta sera bloqueada hoje. Regularize seu cadastro em http://banco-seguro-atualiza.xyz/login e informe sua senha para evitar o bloqueio.\n\nQuestion: Que tipo de mensagem é esta?\nProposed answer: aviso_legitimo: Aviso real de um serviço, sem pedir dados sensíveis.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nSMS recebido: BANCO INFORMA: sua conta sera bloqueada hoje. Regularize seu cadastro em http://banco-seguro-atualiza.xyz/login e informe sua senha para evitar o bloqueio.\n\nQuestion: Que tipo de mensagem é esta?\nProposed answer: pessoal: Conversa entre pessoas conhecidas.\nIs this proposed answer correct? Answer Yes or No."
+   ],
+   "answers": {
+    "golpe": {
+     "type": "noul",
+     "noul": 0.9093276786193566
+    },
+    "tipo": {
+     "type": "choice",
+     "choice": "phishing",
+     "probabilities": {
+      "phishing": 0.5648300212472402,
+      "promocao": 0.018952209480097924,
+      "aviso_legitimo": 0.3964018343657725,
+      "pessoal": 0.0198159349068894
+     },
+     "confidence": 0.419773361662987
+    }
+   }
+  },
+  {
+   "name": "05-en-rag-filter.json",
+   "request": {
+    "state": {
+     "question": "How long does the warranty last for the X200 vacuum?",
+     "passage": "The X200 cordless vacuum ships with two filters and a wall mount. All X-series vacuums are covered by a 24-month limited warranty from the date of purchase. Batteries are covered for 12 months."
+    },
+    "questions": {
+     "relevant": {
+      "type": "noul",
+      "instructions": "Does the passage contain the information needed to answer the question?"
+     },
+     "answer": {
+      "type": "choice",
+      "instructions": "According to the passage, how long is the warranty for the X200?",
+      "criteria": {
+       "12 months": null,
+       "24 months": null,
+       "36 months": null,
+       "not stated": "The passage does not say."
+      }
+     }
+    }
+   },
+   "prompts": [
+    "Context:\n{\"passage\": \"The X200 cordless vacuum ships with two filters and a wall mount. All X-series vacuums are covered by a 24-month limited warranty from the date of purchase. Batteries are covered for 12 months.\", \"question\": \"How long does the warranty last for the X200 vacuum?\"}\n\nQuestion: Does the passage contain the information needed to answer the question?\nIs the answer to this question yes? Answer Yes or No.",
+    "Context:\n{\"passage\": \"The X200 cordless vacuum ships with two filters and a wall mount. All X-series vacuums are covered by a 24-month limited warranty from the date of purchase. Batteries are covered for 12 months.\", \"question\": \"How long does the warranty last for the X200 vacuum?\"}\n\nQuestion: According to the passage, how long is the warranty for the X200?\nProposed answer: 12 months\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"passage\": \"The X200 cordless vacuum ships with two filters and a wall mount. All X-series vacuums are covered by a 24-month limited warranty from the date of purchase. Batteries are covered for 12 months.\", \"question\": \"How long does the warranty last for the X200 vacuum?\"}\n\nQuestion: According to the passage, how long is the warranty for the X200?\nProposed answer: 24 months\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"passage\": \"The X200 cordless vacuum ships with two filters and a wall mount. All X-series vacuums are covered by a 24-month limited warranty from the date of purchase. Batteries are covered for 12 months.\", \"question\": \"How long does the warranty last for the X200 vacuum?\"}\n\nQuestion: According to the passage, how long is the warranty for the X200?\nProposed answer: 36 months\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"passage\": \"The X200 cordless vacuum ships with two filters and a wall mount. All X-series vacuums are covered by a 24-month limited warranty from the date of purchase. Batteries are covered for 12 months.\", \"question\": \"How long does the warranty last for the X200 vacuum?\"}\n\nQuestion: According to the passage, how long is the warranty for the X200?\nProposed answer: not stated: The passage does not say.\nIs this proposed answer correct? Answer Yes or No."
+   ],
+   "answers": {
+    "relevant": {
+     "type": "noul",
+     "noul": 0.7701187204617748
+    },
+    "answer": {
+     "type": "choice",
+     "choice": "not stated",
+     "probabilities": {
+      "12 months": 0.2686234134413154,
+      "24 months": 0.029065007656950418,
+      "36 months": 0.026488766197894344,
+      "not stated": 0.6758228127038399
+     },
+     "confidence": 0.5677637502717866
+    }
+   }
+  },
+  {
+   "name": "06-pt-intencao-assistente.json",
+   "request": {
+    "state": "Usuário disse ao assistente do celular: me lembra de ligar pra minha mãe amanhã às 9 da manhã",
+    "questions": {
+     "acao": {
+      "type": "choice",
+      "instructions": "Qual ação o assistente deve executar?",
+      "criteria": {
+       "criar_lembrete": "Criar um lembrete ou alarme para um horário futuro.",
+       "fazer_ligacao": "Ligar para alguém agora.",
+       "enviar_mensagem": "Mandar uma mensagem de texto.",
+       "pesquisar_web": "Procurar uma informação na internet."
+      }
+     },
+     "tem_horario": {
+      "type": "noul",
+      "instructions": "O pedido informa um horário específico?"
+     }
+    }
+   },
+   "prompts": [
+    "Context:\nUsuário disse ao assistente do celular: me lembra de ligar pra minha mãe amanhã às 9 da manhã\n\nQuestion: Qual ação o assistente deve executar?\nProposed answer: criar_lembrete: Criar um lembrete ou alarme para um horário futuro.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nUsuário disse ao assistente do celular: me lembra de ligar pra minha mãe amanhã às 9 da manhã\n\nQuestion: Qual ação o assistente deve executar?\nProposed answer: fazer_ligacao: Ligar para alguém agora.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nUsuário disse ao assistente do celular: me lembra de ligar pra minha mãe amanhã às 9 da manhã\n\nQuestion: Qual ação o assistente deve executar?\nProposed answer: enviar_mensagem: Mandar uma mensagem de texto.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nUsuário disse ao assistente do celular: me lembra de ligar pra minha mãe amanhã às 9 da manhã\n\nQuestion: Qual ação o assistente deve executar?\nProposed answer: pesquisar_web: Procurar uma informação na internet.\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\nUsuário disse ao assistente do celular: me lembra de ligar pra minha mãe amanhã às 9 da manhã\n\nQuestion: O pedido informa um horário específico?\nIs the answer to this question yes? Answer Yes or No."
+   ],
+   "answers": {
+    "acao": {
+     "type": "choice",
+     "choice": "pesquisar_web",
+     "probabilities": {
+      "criar_lembrete": 0.015572669385367412,
+      "fazer_ligacao": 0.03199875605669298,
+      "enviar_mensagem": 0.2662732340187669,
+      "pesquisar_web": 0.6861553405391727
+     },
+     "confidence": 0.5815404540522303
+    },
+    "tem_horario": {
+     "type": "noul",
+     "noul": 0.24335338634881057
+    }
+   }
+  },
+  {
+   "name": "edge-rendering",
+   "request": {
+    "state": {
+     "z": [
+      1,
+      2.5,
+      1e-05,
+      1e+16,
+      123456789012345678901234567890,
+      -0.0,
+      0.1,
+      100.0,
+      true,
+      null
+     ],
+     "a": "acentuação 🙂 \"aspas\" \\ barra\ttab\nlinha \u0001",
+     "B": {
+      "nested": {
+       "k": []
+      },
+      "empty": {}
+     },
+     "é": 1
+    },
+    "questions": {
+     "c": {
+      "type": "choice",
+      "instructions": {
+       "task": "pick",
+       "list": [
+        3,
+        2,
+        1
+       ]
+      },
+      "criteria": {
+       "b": null,
+       "a": {
+        "why": "obj"
+       },
+       "c": [
+        "x",
+        "y"
+       ],
+       "d": "plain"
+      }
+     },
+     "s": {
+      "type": "score",
+      "instructions": "rate",
+      "criteria": [
+       "low",
+       {
+        "level": "high"
+       },
+       [
+        "mid"
+       ]
+      ]
+     },
+     "n": {
+      "type": "noul",
+      "instructions": "yes?",
+      "criteria": {
+       "true": "it is",
+       "false": {
+        "no": 1
+       }
+      }
+     }
+    }
+   },
+   "prompts": [
+    "Context:\n{\"B\": {\"empty\": {}, \"nested\": {\"k\": []}}, \"a\": \"acentuação 🙂 \\\"aspas\\\" \\\\ barra\\ttab\\nlinha \\u0001\", \"z\": [1, 2.5, 1e-05, 1e+16, 123456789012345678901234567890, -0.0, 0.1, 100.0, true, null], \"é\": 1}\n\nQuestion: {\"list\": [3, 2, 1], \"task\": \"pick\"}\nProposed answer: b\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"B\": {\"empty\": {}, \"nested\": {\"k\": []}}, \"a\": \"acentuação 🙂 \\\"aspas\\\" \\\\ barra\\ttab\\nlinha \\u0001\", \"z\": [1, 2.5, 1e-05, 1e+16, 123456789012345678901234567890, -0.0, 0.1, 100.0, true, null], \"é\": 1}\n\nQuestion: {\"list\": [3, 2, 1], \"task\": \"pick\"}\nProposed answer: a: {\"why\": \"obj\"}\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"B\": {\"empty\": {}, \"nested\": {\"k\": []}}, \"a\": \"acentuação 🙂 \\\"aspas\\\" \\\\ barra\\ttab\\nlinha \\u0001\", \"z\": [1, 2.5, 1e-05, 1e+16, 123456789012345678901234567890, -0.0, 0.1, 100.0, true, null], \"é\": 1}\n\nQuestion: {\"list\": [3, 2, 1], \"task\": \"pick\"}\nProposed answer: c: [\"x\", \"y\"]\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"B\": {\"empty\": {}, \"nested\": {\"k\": []}}, \"a\": \"acentuação 🙂 \\\"aspas\\\" \\\\ barra\\ttab\\nlinha \\u0001\", \"z\": [1, 2.5, 1e-05, 1e+16, 123456789012345678901234567890, -0.0, 0.1, 100.0, true, null], \"é\": 1}\n\nQuestion: {\"list\": [3, 2, 1], \"task\": \"pick\"}\nProposed answer: d: plain\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"B\": {\"empty\": {}, \"nested\": {\"k\": []}}, \"a\": \"acentuação 🙂 \\\"aspas\\\" \\\\ barra\\ttab\\nlinha \\u0001\", \"z\": [1, 2.5, 1e-05, 1e+16, 123456789012345678901234567890, -0.0, 0.1, 100.0, true, null], \"é\": 1}\n\nQuestion: rate\nProposed answer: low\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"B\": {\"empty\": {}, \"nested\": {\"k\": []}}, \"a\": \"acentuação 🙂 \\\"aspas\\\" \\\\ barra\\ttab\\nlinha \\u0001\", \"z\": [1, 2.5, 1e-05, 1e+16, 123456789012345678901234567890, -0.0, 0.1, 100.0, true, null], \"é\": 1}\n\nQuestion: rate\nProposed answer: {\"level\": \"high\"}\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"B\": {\"empty\": {}, \"nested\": {\"k\": []}}, \"a\": \"acentuação 🙂 \\\"aspas\\\" \\\\ barra\\ttab\\nlinha \\u0001\", \"z\": [1, 2.5, 1e-05, 1e+16, 123456789012345678901234567890, -0.0, 0.1, 100.0, true, null], \"é\": 1}\n\nQuestion: rate\nProposed answer: [\"mid\"]\nIs this proposed answer correct? Answer Yes or No.",
+    "Context:\n{\"B\": {\"empty\": {}, \"nested\": {\"k\": []}}, \"a\": \"acentuação 🙂 \\\"aspas\\\" \\\\ barra\\ttab\\nlinha \\u0001\", \"z\": [1, 2.5, 1e-05, 1e+16, 123456789012345678901234567890, -0.0, 0.1, 100.0, true, null], \"é\": 1}\n\nQuestion: yes?\nYes means: it is\nNo means: {\"no\": 1}\nIs the answer to this question yes? Answer Yes or No."
+   ],
+   "answers": {
+    "c": {
+     "type": "choice",
+     "choice": "a",
+     "probabilities": {
+      "b": 0.32288836801833193,
+      "a": 0.5710224174250357,
+      "c": 0.06542627436424614,
+      "d": 0.04066294019238628
+     },
+     "confidence": 0.4280298899000476
+    },
+    "s": {
+     "type": "score",
+     "score": 0.555215337658663,
+     "probabilities": {
+      "0": 0.5226326979747471,
+      "1": 0.39951926639184276,
+      "2": 0.07784803563341011
+     },
+     "confidence": 0.16717699351200543,
+     "legend": {
+      "0": "low",
+      "1": {
+       "level": "high"
+      },
+      "2": [
+       "mid"
+      ]
+     }
+    },
+    "n": {
+     "type": "noul",
+     "noul": 0.082780200997085
+    }
+   }
+  },
+  {
+   "name": "edge-text-state",
+   "request": {
+    "state": "plain text state",
+    "questions": {
+     "only": {
+      "type": "choice",
+      "instructions": "one option",
+      "criteria": {
+       "single": null
+      }
+     }
+    }
+   },
+   "prompts": [
+    "Context:\nplain text state\n\nQuestion: one option\nProposed answer: single\nIs this proposed answer correct? Answer Yes or No."
+   ],
+   "answers": {
+    "only": {
+     "type": "choice",
+     "choice": "single",
+     "probabilities": {
+      "single": 1.0
+     },
+     "confidence": 1.0
+    }
+   }
+  },
+  {
+   "name": "edge-list-state",
+   "request": {
+    "state": [
+     1,
+     "two",
+     {
+      "3": 3
+     }
+    ],
+    "questions": {
+     "q": {
+      "type": "noul",
+      "instructions": "list?"
+     }
+    }
+   },
+   "prompts": [
+    "Context:\n[1, \"two\", {\"3\": 3}]\n\nQuestion: list?\nIs the answer to this question yes? Answer Yes or No."
+   ],
+   "answers": {
+    "q": {
+     "type": "noul",
+     "noul": 0.8958353075696635
+    }
+   }
+  }
+ ],
+ "errors": [
+  {
+   "request": {
+    "state": 5,
+    "questions": {
+     "q": {
+      "type": "noul",
+      "instructions": "x"
+     }
+    }
+   },
+   "error": "state must be text, a JSON object, or an array"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {}
+   },
+   "error": "questions must be a nonempty mapping"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": {
+      "type": "other",
+      "instructions": "x"
+     }
+    }
+   },
+   "error": "question type must be choice, score, or noul"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": {
+      "type": "noul"
+     }
+    }
+   },
+   "error": "instructions and descriptions must be text, an object, or an array"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": {
+      "type": "noul",
+      "instructions": 3
+     }
+    }
+   },
+   "error": "instructions and descriptions must be text, an object, or an array"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": {
+      "type": "choice",
+      "instructions": "x",
+      "criteria": {}
+     }
+    }
+   },
+   "error": "Choice requires between 1 and 255 candidates"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": {
+      "type": "choice",
+      "instructions": "x",
+      "criteria": [
+       "a"
+      ]
+     }
+    }
+   },
+   "error": "Choice requires between 1 and 255 candidates"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": {
+      "type": "choice",
+      "instructions": "x",
+      "criteria": {
+       "a": 1
+      }
+     }
+    }
+   },
+   "error": "instructions and descriptions must be text, an object, or an array"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": {
+      "type": "score",
+      "instructions": "x",
+      "criteria": [
+       "one"
+      ]
+     }
+    }
+   },
+   "error": "Score requires an array of 2 to 10 descriptive levels"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": {
+      "type": "score",
+      "instructions": "x",
+      "criteria": [
+       "0",
+       "1",
+       "2",
+       "3",
+       "4",
+       "5",
+       "6",
+       "7",
+       "8",
+       "9",
+       "10"
+      ]
+     }
+    }
+   },
+   "error": "Score requires an array of 2 to 10 descriptive levels"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": {
+      "type": "noul",
+      "instructions": "x",
+      "criteria": {
+       "true": "t"
+      }
+     }
+    }
+   },
+   "error": "Noul criteria must contain true and false descriptions"
+  },
+  {
+   "request": {
+    "state": "s",
+    "questions": {
+     "q": "not a mapping"
+    }
+   },
+   "error": "question IDs must be strings and definitions must be mappings"
+  }
+ ]
+}

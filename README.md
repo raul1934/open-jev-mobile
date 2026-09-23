@@ -4,10 +4,45 @@ Roda o [Open-Jev-2B](https://github.com/Zefan-Cai/Open-Jev) **localmente num tab
 
 O Open-Jev original precisa de PyTorch e, na prática, de uma GPU NVIDIA. Este projeto:
 
-1. **no PC:** junta o adaptador LoRA do Open-Jev-2B com os pesos do Qwen3.5-2B, converte para GGUF e quantiza (padrão `Q5_K_M`);
-2. **no tablet:** roda esse GGUF no `llama-server` (llama.cpp, instalado pelo Termux) e aplica a cabeça de decisão treinada do Open-Jev em Python puro.
+1. **uma vez, no PC:** junta o adaptador LoRA do Open-Jev-2B com os pesos do Qwen3.5-2B, converte para GGUF e quantiza (padrão `Q5_K_M`). O resultado está publicado no release [`model-v1`](https://github.com/raul1934/open-jev-mobile/releases/tag/model-v1), então você não precisa refazer isso;
+2. **no aparelho:** roda esse GGUF com o llama.cpp e aplica a cabeça de decisão treinada do Open-Jev.
 
-O resultado é a **mesma API HTTP do Open-Jev** (`POST /v1/inference`), com as mesmas perguntas `choice`, `score` e `noul`, a mesma temperatura de calibração e o mesmo formato de resposta. Os arquivos de montagem do prompt e da resposta são cópias sem alteração do Open-Jev ([jev/VENDORED.md](jev/VENDORED.md)).
+As perguntas são as mesmas do Open-Jev (`choice`, `score` e `noul`), com a mesma temperatura de calibração e o mesmo formato de resposta.
+
+Há dois jeitos de usar no aparelho:
+
+- **App Android (APK)** — o mais simples. Instale, toque em *Baixar modelo* e use. Veja abaixo.
+- **Termux** — dá a **mesma API HTTP do Open-Jev** (`POST /v1/inference`) no aparelho, para outros apps chamarem. Usa cópias sem alteração dos módulos do Open-Jev ([jev/VENDORED.md](jev/VENDORED.md)). Veja as seções "Termux" abaixo.
+
+## App Android (APK)
+
+1. Baixe o `open-jev-mobile.apk` na página de [Releases](https://github.com/raul1934/open-jev-mobile/releases) e instale. O Android vai pedir para permitir a instalação de apps de fora da Play Store.
+2. Abra o app e toque em **Baixar modelo**. O app baixa `open-jev-2b-Q5_K_M.gguf` (1,4 GB) e `head.json` do release [`model-v1`](https://github.com/raul1934/open-jev-mobile/releases/tag/model-v1) e confere o SHA-256 dos dois. Prefira Wi-Fi. O download continua mesmo com o app em segundo plano.
+   - Sem internet no aparelho? Copie os dois arquivos para a pasta Download e use **Importar arquivos**.
+3. Escolha um dos **prompts de teste** (em português e inglês, os mesmos de [`examples/`](examples/)), ou cole o seu próprio pedido em JSON no formato do Open-Jev, e toque em **Rodar**.
+
+Depois do download, tudo roda no aparelho, sem internet. Em **Ajustes** dá para mudar o número de threads e o tamanho máximo do prompt.
+
+Por dentro, o app ([`android/`](android/)) compila o mesmo llama.cpp `v0.4.1` usado no Termux e na verificação, e reimplementa em Kotlin a montagem dos prompts, a cabeça de decisão, a calibração e o formato da resposta. Os testes em [`ParityTest.kt`](android/app/src/test/java/com/openjev/mobile/jev/ParityTest.kt) comparam esse código com o Open-Jev original em Python ([`android/tools/make_fixtures.py`](android/tools/make_fixtures.py)): prompts idênticos byte a byte, probabilidades iguais até 1e-12 e as mesmas mensagens de erro.
+
+**Testado num emulador Android** (API 35, x86_64, 4 núcleos, 2,5 GB de RAM, ou seja, menos que um tablet de 4 GB) com os 6 prompts de teste. Detalhes em [`android/DEVICE_TEST.md`](android/DEVICE_TEST.md):
+
+- a resposta principal foi **igual à do modelo original (PyTorch) em 15 de 15 perguntas**;
+- as probabilidades ficaram tão perto do original quanto as do `llama-server` no PC (média de 3,2 pontos de diferença contra 3,4 no PC). Quase toda a diferença vem da quantização, não do app;
+- memória do app durante o uso: ~1,6 GB (PSS);
+- de 15 a 67 s por prompt no emulador, que emula a CPU. Num aparelho de verdade, o tempo depende do chip. Ainda não medi num tablet físico.
+
+### Compilar o APK
+
+Precisa do Android SDK com NDK `27.1.12297006` e CMake `3.22.1` (o Android Studio instala) e de um JDK 17 ou mais novo:
+
+```bash
+cd android
+./gradlew :app:testReleaseUnitTest   # testes de paridade com o Python
+./gradlew :app:assembleRelease       # APK em app/build/outputs/apk/release/
+```
+
+A compilação baixa o código do llama.cpp `v0.4.1` (hash fixado em [`CMakeLists.txt`](android/app/src/main/cpp/CMakeLists.txt)). Use `-PllamaSrc=/caminho/llama.cpp` para usar uma cópia local. No Windows, se der erro de caminho longo, use `-PcxxDir=C:/cxx`. O APK de release é assinado com a chave de debug local, o que basta para instalar manualmente. Para publicar na Play Store, configure uma chave própria.
 
 ## Fidelidade: quanto a quantização muda o resultado
 
@@ -25,11 +60,13 @@ O F16 praticamente coincide com o original, o que mostra que a conversão em si 
 
 **Por que o padrão é Q5_K_M e não 4 bits:** o `Q4_K_M` economiza só 130 MB de arquivo, mas erra três vezes mais e, no PC medido, **usou mais RAM** (tabela abaixo): o llama.cpp cria uma cópia reorganizada dos pesos Q4 para acelerar o cálculo, e isso não acontece com o Q5. Para usar mesmo assim: `python convert/build.py --types Q4_K_M` e `JEV_GGUF=models/open-jev-2b-Q4_K_M.gguf ./termux/start.sh`.
 
-Relatório completo: [convert/verify-report.json](convert/verify-report.json). O próprio Open-Jev avisa que quantizar muda os pesos em cima dos quais a cabeça de decisão foi treinada, então os números de qualidade publicados por eles **não valem automaticamente** para esta versão. 25 perguntas são um teste de sanidade, não um benchmark: se o seu uso for sensível a probabilidades exatas, rode o `verify.py` com os seus próprios exemplos.
+Relatório completo: [convert/verify-report.json](convert/verify-report.json).
+
+**Nos 6 prompts de teste do app (4 em português)**, a diferença do Q5_K_M foi maior: no pior caso, 15,5 pontos (média de 3,4), mas a resposta principal continuou igual em 15 de 15 perguntas. As maiores diferenças aparecem quando duas opções estão quase empatadas (ex.: sentimento "misto" 52% contra "positivo" 41%). Veja [`android/DEVICE_TEST.md`](android/DEVICE_TEST.md). O próprio Open-Jev avisa que quantizar muda os pesos em cima dos quais a cabeça de decisão foi treinada, então os números de qualidade publicados por eles **não valem automaticamente** para esta versão. 25 perguntas são um teste de sanidade, não um benchmark: se o seu uso for sensível a probabilidades exatas, rode o `verify.py` com os seus próprios exemplos.
 
 ## Memória
 
-Pico de RAM do `llama-server` durante uma requisição (o exemplo `examples/request.json`, com 7 candidatos), medido num PC (Ryzen 7 7735HS, Windows, 4 threads):
+Pico de RAM do `llama-server` durante uma requisição (o exemplo `examples/01-en-support-routing.json`, com 7 candidatos), medido num PC (Ryzen 7 7735HS, Windows, 4 threads):
 
 | Versão | `JEV_CTX=2048` | `JEV_CTX=4096` | Tempo da requisição |
 |---|---|---|---|
@@ -43,11 +80,54 @@ O processo Python usa mais uns 30 MB. Num aparelho de 4 GB, o Android costuma de
 
 ## Requisitos
 
-- **PC** (Windows, Linux ou Mac) para a conversão, feita uma vez só: Python 3.10+, ~15 GB livres em disco, 8 GB de RAM. Não precisa de GPU.
 - **Tablet ou celular Android 64-bit** (ARM64) com 4 GB de RAM ou mais e ~2 GB livres de armazenamento.
-- **Termux instalado pelo [F-Droid](https://f-droid.org/packages/com.termux/)**. A versão da Play Store está desatualizada e não recebe pacotes novos.
+- Para o jeito Termux: **Termux instalado pelo [F-Droid](https://f-droid.org/packages/com.termux/)**. A versão da Play Store está desatualizada e não recebe pacotes novos.
+- Só para converter o modelo você mesmo (opcional): um PC com Python 3.10+, ~15 GB livres em disco e 8 GB de RAM. Não precisa de GPU.
 
-## Passo 1 — Converter o modelo (no PC)
+## Termux — Passo 1: instalar
+
+```bash
+pkg install -y git
+git clone https://github.com/raul1934/open-jev-mobile.git
+cd open-jev-mobile
+./termux/install.sh
+```
+
+O `install.sh` instala o `llama-cpp` e o Python do Termux, baixa o modelo do release [`model-v1`](https://github.com/raul1934/open-jev-mobile/releases/tag/model-v1) e confere os SHA-256. Se você converteu o modelo no PC (seção abaixo), copie os dois arquivos para `models/` antes de rodar o script: com os hashes certos, ele não baixa nada.
+
+## Termux — Passo 2: usar
+
+```bash
+./termux/start.sh
+```
+
+Com o servidor no ar, abra **outra sessão** do Termux (deslize da borda esquerda e toque em *New session*):
+
+```bash
+cd open-jev-mobile
+python -m jev_mobile predict examples/01-en-support-routing.json
+```
+
+Ou chame a API HTTP, igual ao Open-Jev:
+
+```bash
+curl -s http://127.0.0.1:8791/v1/inference -H 'Content-Type: application/json' -d @examples/01-en-support-routing.json
+```
+
+Para chamar a partir de outro aparelho na mesma rede Wi-Fi, use `JEV_HOST=0.0.0.0 ./termux/start.sh` e troque `127.0.0.1` pelo IP do tablet. Não faça isso em redes públicas: a API não tem senha.
+
+### Ajustes (variáveis de ambiente do `start.sh`)
+
+| Variável | Padrão | Para quê |
+|---|---|---|
+| `JEV_CTX` | `2048` | maior prompt aceito, em tokens. Suba para `4096` (limite do Open-Jev) se tiver memória sobrando |
+| `JEV_THREADS` | `4` | threads da CPU. 4 costuma ser o número de núcleos rápidos |
+| `JEV_GGUF` | `models/open-jev-2b-Q5_K_M.gguf` | para usar outro arquivo, por exemplo o `Q4_K_M` |
+| `JEV_HOST` / `JEV_PORT` | `127.0.0.1` / `8791` | endereço da API |
+
+## Converter o modelo você mesmo (opcional, no PC)
+
+O release `model-v1` já tem o modelo pronto. Esta seção só serve para reproduzir a conversão ou gerar outra quantização.
 
 ```bash
 git clone https://github.com/raul1934/open-jev-mobile.git
@@ -80,54 +160,6 @@ Opcional, para medir a fidelidade no seu PC:
 git clone https://github.com/Zefan-Cai/Open-Jev.git ../Open-Jev
 python convert/verify.py --open-jev ../Open-Jev --llama-server C:/caminho/llama-server.exe models/open-jev-2b-Q5_K_M.gguf
 ```
-
-## Passo 2 — Instalar no tablet (Termux)
-
-```bash
-pkg install -y git
-git clone https://github.com/raul1934/open-jev-mobile.git
-cd open-jev-mobile
-./termux/install.sh
-```
-
-## Passo 3 — Copiar o modelo para o tablet
-
-Passe `open-jev-2b-Q5_K_M.gguf` e `head.json` para a pasta **Download** do tablet (cabo USB, Google Drive etc.). Depois, no Termux:
-
-```bash
-termux-setup-storage
-cp ~/storage/downloads/open-jev-2b-Q5_K_M.gguf ~/storage/downloads/head.json models/
-```
-
-## Passo 4 — Usar
-
-```bash
-./termux/start.sh
-```
-
-Com o servidor no ar, abra **outra sessão** do Termux (deslize da borda esquerda e toque em *New session*):
-
-```bash
-cd open-jev-mobile
-python -m jev_mobile predict examples/request.json
-```
-
-Ou chame a API HTTP, igual ao Open-Jev:
-
-```bash
-curl -s http://127.0.0.1:8791/v1/inference -H 'Content-Type: application/json' -d @examples/request.json
-```
-
-Para chamar a partir de outro aparelho na mesma rede Wi-Fi, use `JEV_HOST=0.0.0.0 ./termux/start.sh` e troque `127.0.0.1` pelo IP do tablet. Não faça isso em redes públicas: a API não tem senha.
-
-### Ajustes (variáveis de ambiente do `start.sh`)
-
-| Variável | Padrão | Para quê |
-|---|---|---|
-| `JEV_CTX` | `2048` | maior prompt aceito, em tokens. Suba para `4096` (limite do Open-Jev) se tiver memória sobrando |
-| `JEV_THREADS` | `4` | threads da CPU. 4 costuma ser o número de núcleos rápidos |
-| `JEV_GGUF` | `models/open-jev-2b-Q5_K_M.gguf` | para usar outro arquivo, por exemplo o `Q4_K_M` |
-| `JEV_HOST` / `JEV_PORT` | `127.0.0.1` / `8791` | endereço da API |
 
 ## Problemas comuns
 

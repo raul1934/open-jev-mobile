@@ -1,0 +1,26 @@
+{
+  "state": "Avaliação de um restaurante: A comida chegou quente e muito saborosa, mas a entrega atrasou quase uma hora e ninguém avisou. O atendente pediu desculpas e mandou um cupom de desconto.",
+  "questions": {
+    "sentimento": {
+      "type": "score",
+      "instructions": "Qual o sentimento geral da avaliação?",
+      "criteria": [
+        "Negativo: o cliente ficou insatisfeito no geral.",
+        "Misto: há pontos positivos e negativos importantes.",
+        "Positivo: o cliente ficou satisfeito no geral."
+      ]
+    },
+    "reclama_de_atraso": {
+      "type": "noul",
+      "instructions": "O cliente reclama de atraso na entrega?"
+    },
+    "elogia_comida": {
+      "type": "noul",
+      "instructions": "O cliente elogia a comida?",
+      "criteria": {
+        "true": "Há um elogio explícito ao sabor, temperatura ou qualidade da comida.",
+        "false": "A comida não é elogiada ou é criticada."
+      }
+    }
+  }
+}

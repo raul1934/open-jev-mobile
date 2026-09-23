@@ -1,0 +1,19 @@
+{
+  "state": "Usuário disse ao assistente do celular: me lembra de ligar pra minha mãe amanhã às 9 da manhã",
+  "questions": {
+    "acao": {
+      "type": "choice",
+      "instructions": "Qual ação o assistente deve executar?",
+      "criteria": {
+        "criar_lembrete": "Criar um lembrete ou alarme para um horário futuro.",
+        "fazer_ligacao": "Ligar para alguém agora.",
+        "enviar_mensagem": "Mandar uma mensagem de texto.",
+        "pesquisar_web": "Procurar uma informação na internet."
+      }
+    },
+    "tem_horario": {
+      "type": "noul",
+      "instructions": "O pedido informa um horário específico?"
+    }
+  }
+}

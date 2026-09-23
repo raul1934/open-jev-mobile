@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three probability bars of different lengths. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF" android:pathData="M34,38h40a4,4 0 0,1 0,8h-40a4,4 0 0,1 0,-8z" />
+    <path android:fillColor="#9CC3F0" android:pathData="M34,50h24a4,4 0 0,1 0,8h-24a4,4 0 0,1 0,-8z" />
+    <path android:fillColor="#9CC3F0" android:pathData="M34,62h12a4,4 0 0,1 0,8h-12a4,4 0 0,1 0,-8z" />
+</vector>

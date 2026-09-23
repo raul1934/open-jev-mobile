@@ -1,6 +1,6 @@
 """Command line: one-off prediction, or the Open-Jev HTTP API on top of llama-server.
 
-    python -m jev_mobile predict examples/request.json
+    python -m jev_mobile predict examples/01-en-support-routing.json
     python -m jev_mobile serve --port 8791
 """
 import argparse

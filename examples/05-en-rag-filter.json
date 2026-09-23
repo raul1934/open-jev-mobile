@@ -1,0 +1,22 @@
+{
+  "state": {
+    "question": "How long does the warranty last for the X200 vacuum?",
+    "passage": "The X200 cordless vacuum ships with two filters and a wall mount. All X-series vacuums are covered by a 24-month limited warranty from the date of purchase. Batteries are covered for 12 months."
+  },
+  "questions": {
+    "relevant": {
+      "type": "noul",
+      "instructions": "Does the passage contain the information needed to answer the question?"
+    },
+    "answer": {
+      "type": "choice",
+      "instructions": "According to the passage, how long is the warranty for the X200?",
+      "criteria": {
+        "12 months": null,
+        "24 months": null,
+        "36 months": null,
+        "not stated": "The passage does not say."
+      }
+    }
+  }
+}

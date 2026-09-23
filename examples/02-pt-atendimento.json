@@ -1,0 +1,28 @@
+{
+  "state": "Mensagem do cliente: Comprei um fone de ouvido há 10 dias e ele parou de funcionar do lado esquerdo. Quero trocar ou receber o dinheiro de volta. O pedido é o 48213.",
+  "questions": {
+    "setor": {
+      "type": "choice",
+      "instructions": "Qual setor deve tratar esta mensagem?",
+      "criteria": {
+        "trocas": "Defeitos, trocas e devoluções de produtos.",
+        "financeiro": "Cobranças, boletos, reembolsos sem defeito no produto.",
+        "entregas": "Atrasos, extravios ou rastreio de pedidos.",
+        "vendas": "Dúvidas antes da compra, preços e disponibilidade."
+      }
+    },
+    "tem_numero_pedido": {
+      "type": "noul",
+      "instructions": "A mensagem informa o número do pedido?"
+    },
+    "urgencia": {
+      "type": "score",
+      "instructions": "Qual a urgência, usando só o que está escrito?",
+      "criteria": [
+        "Baixa: dúvida ou pedido sem prazo.",
+        "Média: problema com um produto, sem prejuízo imediato.",
+        "Alta: risco à segurança, cobrança indevida grande ou prazo vencendo hoje."
+      ]
+    }
+  }
+}

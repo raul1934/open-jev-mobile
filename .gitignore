@@ -6,3 +6,10 @@ convert/reference-logits.json
 __pycache__/
 *.pyc
 .venv/
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+dist/

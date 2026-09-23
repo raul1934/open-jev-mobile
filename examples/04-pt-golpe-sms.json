@@ -1,0 +1,23 @@
+{
+  "state": "SMS recebido: BANCO INFORMA: sua conta sera bloqueada hoje. Regularize seu cadastro em http://banco-seguro-atualiza.xyz/login e informe sua senha para evitar o bloqueio.",
+  "questions": {
+    "golpe": {
+      "type": "noul",
+      "instructions": "Esta mensagem tem sinais de golpe (phishing)?",
+      "criteria": {
+        "true": "Pede senha ou dados, cria urgência ou usa um link suspeito.",
+        "false": "Mensagem legítima, sem pedido de dados sensíveis nem link suspeito."
+      }
+    },
+    "tipo": {
+      "type": "choice",
+      "instructions": "Que tipo de mensagem é esta?",
+      "criteria": {
+        "phishing": "Tenta roubar senha, dados bancários ou pessoais.",
+        "promocao": "Propaganda ou oferta comercial.",
+        "aviso_legitimo": "Aviso real de um serviço, sem pedir dados sensíveis.",
+        "pessoal": "Conversa entre pessoas conhecidas."
+      }
+    }
+  }
+}
