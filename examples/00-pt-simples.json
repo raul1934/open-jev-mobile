@@ -1,0 +1,9 @@
+{
+  "state": "O céu está azul e não há nenhuma nuvem.",
+  "questions": {
+    "chovendo": {
+      "type": "noul",
+      "instructions": "Está chovendo agora?"
+    }
+  }
+}

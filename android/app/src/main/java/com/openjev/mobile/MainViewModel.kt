@@ -6,7 +6,9 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.openjev.mobile.engine.Head
+import com.openjev.mobile.engine.DeviceInfo
 import com.openjev.mobile.engine.ModelStore
+import com.openjev.mobile.engine.Optimizer
 import com.openjev.mobile.engine.Native
 import com.openjev.mobile.engine.Prediction
 import com.openjev.mobile.engine.Predictor
@@ -30,6 +32,9 @@ sealed interface ModelState {
 
 data class Example(val file: String, val json: String)
 
+data class OptimizerResult(val cpu: String, val trials: List<Optimizer.Trial>, val best: Int,
+                           val contextSize: Int, val ramGb: Double)
+
 data class RunProgress(val done: Int, val total: Int, val step: String, val startedAt: Long)
 
 /** appBytes: resident memory of the app (includes the model pages mapped from the file). */
@@ -45,6 +50,7 @@ data class UiState(
     val memory: Memory? = null,
     val peakAppBytes: Long = 0,
     val result: Prediction? = null,
+    val optimizer: OptimizerResult? = null,
     val error: String? = null,
     val threads: Int = 4,
     val contextSize: Int = 2048,
@@ -62,6 +68,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UiState> = _state
 
     private var handle = 0L
+    private var head: Head? = null
     private var predictor: Predictor? = null
 
     private val activityManager = app.getSystemService(android.app.ActivityManager::class.java)
@@ -175,9 +182,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (handle != 0L) Native.free(handle)
                 handle = 0L
                 predictor = null
-                val head = Head.load(store.file(ModelStore.HEAD))
+                val h = Head.load(store.file(ModelStore.HEAD))
                 handle = Native.load(store.file(ModelStore.GGUF).absolutePath, s.contextSize, s.threads)
-                predictor = Predictor(handle, head)
+                head = h
+                predictor = Predictor(handle, h)
             }
             _state.update { it.copy(model = ModelState.Ready) }
             startPendingRun()
@@ -202,6 +210,50 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun overrideSettings(threads: Int?, prefixCache: Boolean?) {
         val s = _state.value
         applySettings(threads ?: s.threads, s.contextSize, prefixCache ?: s.prefixCache)
+    }
+
+    /**
+     * Picks the fastest thread count for this CPU on a real prompt, turns the prefix cache on and
+     * sizes the context to the RAM (4096 tokens only with 6 GB or more).
+     */
+    fun optimize() {
+        val h = handle
+        val hd = head ?: return
+        if (h == 0L || _state.value.running != null) return
+        val candidates = DeviceInfo.threadCandidates()
+        val started = android.os.SystemClock.elapsedRealtime()
+        _state.update { it.copy(running = RunProgress(0, candidates.size, "Começando", started), optimizer = null,
+                                result = null, error = null, peakAppBytes = it.memory?.appBytes ?: 0) }
+        viewModelScope.launch {
+            try {
+                // A typical prompt: the first option of the support-routing example in Portuguese.
+                val example = _state.value.examples.firstOrNull { it.file.startsWith("02-") } ?: _state.value.examples.first()
+                val request = Json.parse(example.json) as com.openjev.mobile.jev.JsonObject
+                val record = com.openjev.mobile.jev.Api.compileRequest(request["state"]!!, request["questions"]).first()
+                val prompt = com.openjev.mobile.jev.Api.candidatePrompts(record).first()
+                val trials = withContext(Dispatchers.Default) {
+                    val tokens = Native.tokenize(h, hd.promptPrefix + prompt + hd.promptSuffix)
+                    Optimizer(h).run(tokens, candidates) { done, text ->
+                        _state.update { it.copy(running = RunProgress(done, candidates.size, "$text (${tokens.size} tokens)", started)) }
+                    }
+                }
+                val best = trials.minBy { it.seconds }.threads
+                val ramBytes = _state.value.memory?.totalBytes ?: 0L
+                val ctx = if (ramBytes >= 6_000_000_000L) 4096 else 2048
+                withContext(Dispatchers.Default) { Native.setThreads(h, best) }
+                val reload = ctx != _state.value.contextSize
+                prefs.edit().putInt("threads", best).putInt("ctx", ctx).putBoolean("prefixCache", true).apply()
+                _state.update {
+                    it.copy(running = null, threads = best, contextSize = ctx, prefixCache = true,
+                            optimizer = OptimizerResult(DeviceInfo.describe(), trials, best, ctx, ramBytes / 1e9))
+                }
+                android.util.Log.i("openjev", "optimizer ${DeviceInfo.describe()} " +
+                    trials.joinToString { "${it.threads}t=${"%.2f".format(it.seconds)}s" } + " best=$best ctx=$ctx")
+                if (reload) loadModel()
+            } catch (e: Throwable) {
+                _state.update { it.copy(error = "Otimização falhou: ${e.message}", running = null) }
+            }
+        }
     }
 
     fun run() {

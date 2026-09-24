@@ -118,6 +118,11 @@ Java_com_openjev_mobile_engine_Native_load(JNIEnv * env, jobject, jstring path, 
     return reinterpret_cast<jlong>(e);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_openjev_mobile_engine_Native_setThreads(JNIEnv *, jobject, jlong handle, jint n_threads) {
+    llama_set_n_threads(engine(handle)->ctx, n_threads, n_threads);
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_openjev_mobile_engine_Native_contextSize(JNIEnv *, jobject, jlong handle) {
     return engine(handle)->n_ctx;

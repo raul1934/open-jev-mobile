@@ -2,6 +2,27 @@
  "temperature": 1.518796342858676,
  "cases": [
   {
+   "name": "00-pt-simples.json",
+   "request": {
+    "state": "O céu está azul e não há nenhuma nuvem.",
+    "questions": {
+     "chovendo": {
+      "type": "noul",
+      "instructions": "Está chovendo agora?"
+     }
+    }
+   },
+   "prompts": [
+    "Context:\nO céu está azul e não há nenhuma nuvem.\n\nQuestion: Está chovendo agora?\nIs the answer to this question yes? Answer Yes or No."
+   ],
+   "answers": {
+    "chovendo": {
+     "type": "noul",
+     "noul": 0.7317616647947358
+    }
+   }
+  },
+  {
    "name": "01-en-support-routing.json",
    "request": {
     "state": "A customer says: I was charged twice for one order. The service is working normally. There is no sign of unauthorized access.",

@@ -9,6 +9,7 @@ object Native {
     external fun init(nativeLibDir: String)
     external fun load(path: String, nCtx: Int, nThreads: Int): Long
     external fun contextSize(handle: Long): Int
+    external fun setThreads(handle: Long, threads: Int)
     external fun tokenize(handle: Long, text: String): IntArray
     external fun hiddenState(handle: Long, tokens: IntArray): FloatArray
 

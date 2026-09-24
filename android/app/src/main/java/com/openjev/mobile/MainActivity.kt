@@ -40,6 +40,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -99,8 +100,16 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Screen(state: UiState, vm: MainViewModel) {
     var showSettings by remember { mutableStateOf(false) }
+    val scroll = rememberScrollState()
+    // Answers are below the editor: bring them into view when a run (or the optimizer) finishes.
+    LaunchedEffect(state.result, state.optimizer, state.error) {
+        if (state.result != null || state.optimizer != null || state.error != null) {
+            kotlinx.coroutines.delay(150)
+            scroll.animateScrollTo(scroll.maxValue)
+        }
+    }
     Column(
-        Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(scroll).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(Modifier.fillMaxWidth()) {
@@ -115,12 +124,17 @@ private fun Screen(state: UiState, vm: MainViewModel) {
         if (state.model == ModelState.Ready) {
             RequestEditor(state, vm)
             state.error?.let { Text("Erro: $it", color = MaterialTheme.colorScheme.error) }
+            state.optimizer?.let { OptimizerCard(it) }
             state.result?.let { result ->
                 result.answers.forEach { (id, answer) -> AnswerCard(id, answer) }
             }
         }
     }
-    if (showSettings) SettingsDialog(state, onDismiss = { showSettings = false }) { threads, ctx, cache ->
+    if (showSettings) SettingsDialog(
+        state,
+        onDismiss = { showSettings = false },
+        onOptimize = { showSettings = false; vm.optimize() },
+    ) { threads, ctx, cache ->
         showSettings = false
         vm.applySettings(threads, ctx, cache)
     }
@@ -242,6 +256,24 @@ private fun exampleLabel(example: Example): String {
 }
 
 @Composable
+private fun OptimizerCard(r: OptimizerResult) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Otimização do aparelho", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("CPU: ${r.cpu} · RAM: ${String.format(Locale.ROOT, "%.1f", r.ramGb)} GB",
+                 style = MaterialTheme.typography.bodySmall)
+            val slowest = r.trials.maxOf { it.seconds }
+            r.trials.forEach { t ->
+                Bar("${t.threads} threads" + if (t.threads == r.best) "  ← mais rápido" else "",
+                    t.seconds / slowest, value = seconds(t.seconds))
+            }
+            Text("Aplicado: ${r.best} threads, contexto de ${r.contextSize} tokens, reaproveitar contexto ligado.",
+                 style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
 private fun AnswerCard(id: String, answer: Answer) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -273,19 +305,20 @@ private fun AnswerCard(id: String, answer: Answer) {
 }
 
 @Composable
-private fun Bar(label: String, p: Double) {
+private fun Bar(label: String, p: Double, value: String = pct(p)) {
     Column {
         Row {
             Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, maxLines = 2,
                  overflow = TextOverflow.Ellipsis)
-            Text(pct(p), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+            Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
         }
         LinearProgressIndicator(progress = { p.toFloat() }, Modifier.fillMaxWidth(), drawStopIndicator = {})
     }
 }
 
 @Composable
-private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onApply: (Int, Int, Boolean) -> Unit) {
+private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onOptimize: () -> Unit,
+                           onApply: (Int, Int, Boolean) -> Unit) {
     val cores = Runtime.getRuntime().availableProcessors()
     var threads by remember { mutableFloatStateOf(state.threads.toFloat()) }
     var ctx by remember { mutableStateOf(state.contextSize) }
@@ -297,6 +330,11 @@ private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onApply: (Int,
         title = { Text("Ajustes") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOptimize, enabled = state.model == ModelState.Ready,
+                       modifier = Modifier.fillMaxWidth()) { Text("Otimizar para este aparelho") }
+                Text("Testa o modelo com diferentes números de threads (leva cerca de 1 minuto), " +
+                     "escolhe o mais rápido e ajusta o resto para a memória do aparelho.",
+                     style = MaterialTheme.typography.bodySmall)
                 Text("Threads da CPU: ${threads.roundToInt()} (o aparelho tem $cores núcleos)")
                 Slider(value = threads, onValueChange = { threads = it }, valueRange = 1f..cores.toFloat(),
                        steps = (cores - 2).coerceAtLeast(0))
