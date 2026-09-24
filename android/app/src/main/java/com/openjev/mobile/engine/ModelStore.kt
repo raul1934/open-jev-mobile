@@ -31,6 +31,9 @@ class ModelStore(private val context: Context) {
 
     fun file(model: ModelFile) = File(dir, model.name)
 
+    /** Every GGUF in the model folder (the verified default plus any copied in for testing). */
+    fun ggufFiles(): List<File> = dir.listFiles { f -> f.name.endsWith(".gguf") }.orEmpty().sortedBy { it.length() }
+
     /** True when both files are present and were verified once (hashing 1.4 GB takes a while). */
     fun isReady(): Boolean = FILES.all { f ->
         val file = file(f)
@@ -123,6 +126,13 @@ class ModelStore(private val context: Context) {
         val name = context.contentResolver.query(uri, null, null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(c.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)) else null
         } ?: ""
+        // Other quantizations (e.g. open-jev-2b-Q4_0.gguf) keep their name and appear in the model selector.
+        if (name.endsWith(".gguf") && name != GGUF.name && !name.contains('/')) {
+            context.contentResolver.openInputStream(uri)!!.use { input ->
+                File(dir, name).outputStream().use { input.copyTo(it, 1 shl 20) }
+            }
+            return name
+        }
         val target = when {
             name.endsWith(".gguf") -> GGUF
             name.endsWith(".json") -> HEAD

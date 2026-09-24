@@ -35,7 +35,29 @@ class Head(val weight: DoubleArray, val bias: Double, val temperature: Double, v
     }
 }
 
-data class Prediction(val answers: List<Pair<String, Answer>>, val candidates: Int, val inputTokens: Int, val seconds: Double)
+/** Where the time of one prediction went: stage -> (seconds, tokens decoded, calls). */
+class Profile {
+    data class Entry(var seconds: Double = 0.0, var tokens: Int = 0, var calls: Int = 0)
+    val entries = LinkedHashMap<String, Entry>()
+
+    fun <T> time(stage: String, tokens: Int = 0, block: () -> T): T {
+        val t0 = System.nanoTime()
+        try {
+            return block()
+        } finally {
+            entries.getOrPut(stage) { Entry() }.apply {
+                seconds += (System.nanoTime() - t0) / 1e9; this.tokens += tokens; calls++
+            }
+        }
+    }
+
+    fun describe() = entries.entries.joinToString(", ") { (k, e) ->
+        "$k=" + String.format(java.util.Locale.ROOT, "%.2f", e.seconds) + "s/${e.tokens}tok/${e.calls}x"
+    }
+}
+
+data class Prediction(val answers: List<Pair<String, Answer>>, val candidates: Int, val inputTokens: Int, val seconds: Double,
+                      val decodedTokens: Int = 0, val profile: Profile = Profile())
 
 /**
  * Same pipeline as jev_mobile + jev.serving.Predictor: compile the request,
@@ -60,15 +82,21 @@ class Predictor(private val handle: Long, private val head: Head) {
     /** Called when something else (the optimizer) changed the native thread count. */
     fun forgetThreads() { currentThreads = -1 }
 
+    private var profile = Profile()
+
     private fun decodeAll(tokens: IntArray): FloatArray {
         useThreadsFor(tokens.size)
-        return Native.hiddenState(handle, tokens)
+        return profile.time("opções (sem cache)", tokens.size) { Native.hiddenState(handle, tokens) }
     }
 
-    private fun extend(tokens: IntArray, start: Int, wantHidden: Boolean): FloatArray? {
+    private fun extend(stage: String, tokens: IntArray, start: Int, wantHidden: Boolean): FloatArray? {
         useThreadsFor(tokens.size)
-        return Native.extend(handle, tokens, start, wantHidden)
+        return profile.time(stage, tokens.size) { Native.extend(handle, tokens, start, wantHidden) }
     }
+
+    private fun save(slot: Int) = profile.time("salvar estado") { Native.saveState(handle, slot) }
+    private fun restore(slot: Int) = profile.time("restaurar estado") { Native.restoreState(handle, slot) }
+    private fun reset() = profile.time("limpar") { Native.reset(handle) }
 
     /**
      * With [prefixCache], tokens shared by every prompt of the request (the context) are
@@ -80,6 +108,7 @@ class Predictor(private val handle: Long, private val head: Head) {
     fun predict(request: JsonValue, prefixCache: Boolean = true,
                 onProgress: (done: Int, total: Int, step: String) -> Unit = { _, _, _ -> }): Prediction {
         val start = System.nanoTime()
+        profile = Profile()
         require(request is JsonObject && request["state"] != null && request["questions"] != null) {
             "request requires state and questions"
         }
@@ -88,7 +117,9 @@ class Predictor(private val handle: Long, private val head: Head) {
         val total = prompts.sumOf { it.size }
         onProgress(0, total, "Preparando os prompts")
         // Tokenize everything first so an over-long prompt fails before any slow work.
-        val tokens = prompts.map { group -> group.map { Native.tokenize(handle, head.promptPrefix + it + head.promptSuffix) } }
+        val tokens = profile.time("tokenizar") {
+            prompts.map { group -> group.map { Native.tokenize(handle, head.promptPrefix + it + head.promptSuffix) } }
+        }
         val longest = tokens.flatten().maxOf { it.size }
         if (longest > maxLength) {
             throw IllegalArgumentException("Input length $longest exceeds max_length=$maxLength; no silent truncation" +
@@ -114,7 +145,9 @@ class Predictor(private val handle: Long, private val head: Head) {
             }
             record.id to Api.answer(record, Api.softmax(Api.logits(record, scores), head.temperature))
         }
-        return Prediction(answers, total, tokens.flatten().sumOf { it.size }, (System.nanoTime() - start) / 1e9)
+        val decoded = profile.entries.values.sumOf { it.tokens }
+        return Prediction(answers, total, tokens.flatten().sumOf { it.size }, (System.nanoTime() - start) / 1e9,
+                          decoded, profile)
     }
 
     /** Longest shared token prefix, leaving at least one token per prompt to decode (its output is read). */
@@ -134,25 +167,25 @@ class Predictor(private val handle: Long, private val head: Head) {
     private fun cachedHiddenStates(ids: List<String>, tokens: List<List<IntArray>>, step: (String) -> Unit,
                                    tick: () -> Unit): List<List<FloatArray>> {
         val shared = commonPrefix(tokens.flatten())
-        Native.reset(handle)
+        reset()
         if (shared > 0) {
             step("Lendo o contexto compartilhado ($shared tokens)")
-            extend(tokens[0][0].copyOfRange(0, shared), 0, false)
-            Native.saveState(handle, 0)
+            extend("contexto", tokens[0][0].copyOfRange(0, shared), 0, false)
+            save(0)
         }
-        fun restoreShared() = if (shared > 0) Native.restoreState(handle, 0) else Native.reset(handle)
+        fun restoreShared() = if (shared > 0) restore(0) else reset()
         return tokens.mapIndexed { index, group ->
             val own = maxOf(shared, commonPrefix(group))
             if (index > 0) restoreShared()
             if (own > shared) {
                 step("\"${ids[index]}\": lendo a pergunta (${own - shared} tokens)")
-                extend(group[0].copyOfRange(shared, own), shared, false)
-                if (group.size > 1) Native.saveState(handle, 1)
+                extend("pergunta", group[0].copyOfRange(shared, own), shared, false)
+                if (group.size > 1) save(1)
             }
             group.mapIndexed { j, tokens ->
-                if (j > 0) if (own > shared) Native.restoreState(handle, 1) else restoreShared()
+                if (j > 0) if (own > shared) restore(1) else restoreShared()
                 step(optionStep(ids[index], j, group.size, tokens.size - own))
-                extend(tokens.copyOfRange(own, tokens.size), own, true)!!.also { tick() }
+                extend("opções", tokens.copyOfRange(own, tokens.size), own, true)!!.also { tick() }
             }
         }
     }

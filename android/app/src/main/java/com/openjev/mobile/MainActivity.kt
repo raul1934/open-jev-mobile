@@ -125,6 +125,7 @@ private fun Screen(state: UiState, vm: MainViewModel) {
             RequestEditor(state, vm)
             state.error?.let { Text("Erro: $it", color = MaterialTheme.colorScheme.error) }
             state.optimizer?.let { OptimizerCard(it) }
+            state.formats?.let { FormatsCard(it, state.gguf, vm) }
             state.result?.let { result ->
                 result.answers.forEach { (id, answer) -> AnswerCard(id, answer) }
             }
@@ -134,6 +135,8 @@ private fun Screen(state: UiState, vm: MainViewModel) {
         state,
         onDismiss = { showSettings = false },
         onOptimize = { showSettings = false; vm.optimize() },
+        onTestFormats = { showSettings = false; vm.testFormats() },
+        onSelectModel = { name -> showSettings = false; vm.useFormat(name) },
     ) { threads, ctx, cache, auto ->
         showSettings = false
         vm.applySettings(threads, ctx, cache, auto)
@@ -164,9 +167,14 @@ private fun StatusPanel(state: UiState) {
                      style = MaterialTheme.typography.bodySmall)
             } else if (result != null) {
                 Text("Última execução: ${seconds(result.seconds)} · ${result.candidates} opções · " +
-                     "${seconds(result.seconds / result.candidates)} por opção · ${result.inputTokens} tokens" +
-                     if (state.prefixCache) " · contexto reaproveitado" else "",
+                     "${seconds(result.seconds / result.candidates)} por opção · " +
+                     "${result.decodedTokens} de ${result.inputTokens} tokens calculados" +
+                     if (state.prefixCache) " (contexto reaproveitado)" else "",
                      style = MaterialTheme.typography.bodyMedium)
+                // Where the time went, largest first.
+                Text(result.profile.entries.entries.sortedByDescending { it.value.seconds }.joinToString(" · ") { (k, e) ->
+                    "$k ${String.format(Locale.ROOT, "%.1f", e.seconds)} s" + if (e.tokens > 0) " (${e.tokens} tok)" else ""
+                }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             state.system?.let { DeviceLines(it) }
             state.memory?.let { m ->
@@ -296,6 +304,42 @@ private fun exampleLabel(example: Example): String {
     return if (parts.size >= 3) parts[1] + " · " + parts.drop(2).joinToString(" ") else example.file
 }
 
+/** Measured on this device; the fidelity numbers were measured on the PC against the original model. */
+private val FIDELITY = mapOf(
+    "Q4_0" to "pior 24,1 · média 4,9 pts · mudou 1 resposta em 25", "Q4_K_M" to "pior 23,6 · média 4,1 pts", "Q5_K_M" to "pior 7,8 · média 2,0 pts",
+    "Q6_K" to "pior 5,9 · média 1,2 pts", "Q8_0" to "pior 4,1 · média 0,7 pts",
+)
+
+@Composable
+private fun FormatsCard(results: List<FormatResult>, current: String?, vm: MainViewModel) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Formatos do modelo neste aparelho", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            val fastest = results.filter { it.error == null }.minOfOrNull { it.seconds }
+            results.forEach { r ->
+                val quant = r.name.removePrefix("open-jev-2b-").removeSuffix(".gguf")
+                val inUse = (current ?: ModelStore.GGUF.name) == r.name
+                Column {
+                    Text("$quant · ${gb(r.bytes)}" + if (inUse) " · em uso" else "", fontWeight = FontWeight.Medium)
+                    if (r.error != null) {
+                        Text("Falhou: ${r.error}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text("${seconds(r.seconds)} para ${r.tokens} tokens (" +
+                             String.format(Locale.ROOT, "%.0f", r.tokens / r.seconds) + " tokens/s)" +
+                             (if (r.seconds == fastest) " ✓ mais rápido" else "") +
+                             " · memória ${gb(r.appBytes)}", style = MaterialTheme.typography.bodySmall)
+                        FIDELITY[quant]?.let {
+                            Text("Diferença do modelo original (PC): $it", style = MaterialTheme.typography.bodySmall,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (!inUse) TextButton(onClick = { vm.useFormat(r.name) }) { Text("Usar este formato") }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun OptimizerCard(r: OptimizerResult) {
     Card(Modifier.fillMaxWidth()) {
@@ -360,7 +404,8 @@ private fun Bar(label: String, p: Double, value: String = pct(p)) {
 }
 
 @Composable
-private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onOptimize: () -> Unit,
+private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onOptimize: () -> Unit, onTestFormats: () -> Unit,
+                           onSelectModel: (String) -> Unit,
                            onApply: (Int, Int, Boolean, Boolean) -> Unit) {
     val cores = Runtime.getRuntime().availableProcessors()
     var threads by remember { mutableFloatStateOf(state.threads.toFloat()) }
@@ -374,8 +419,22 @@ private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onOptimize: ()
         title = { Text("Ajustes") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.availableModels.size > 1) {
+                    Text("Modelo carregado", fontWeight = FontWeight.Medium)
+                    val current = state.gguf ?: ModelStore.GGUF.name
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.availableModels.forEach { name ->
+                            FilterChip(selected = name == current, onClick = { if (name != current) onSelectModel(name) },
+                                       label = { Text(name.removePrefix("open-jev-2b-").removeSuffix(".gguf")) })
+                        }
+                    }
+                    Text("Trocar recarrega o modelo (alguns segundos). Q5_K_M é o padrão verificado.",
+                         style = MaterialTheme.typography.bodySmall)
+                }
                 Button(onClick = onOptimize, enabled = state.model == ModelState.Ready,
                        modifier = Modifier.fillMaxWidth()) { Text("Otimizar para este aparelho") }
+                OutlinedButton(onClick = onTestFormats, enabled = state.model == ModelState.Ready,
+                               modifier = Modifier.fillMaxWidth()) { Text("Testar formatos do modelo") }
                 Text("Mede trechos de 16 a 160 tokens com diferentes números de threads (1 a 2 minutos), " +
                      "escolhe o mais rápido para cada tamanho e ajusta o resto para a memória do aparelho.",
                      style = MaterialTheme.typography.bodySmall)

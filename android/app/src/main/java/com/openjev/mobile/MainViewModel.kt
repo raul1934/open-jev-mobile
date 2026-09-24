@@ -37,6 +37,9 @@ data class Example(val file: String, val json: String)
 data class OptimizerResult(val cpu: String, val trials: List<Optimizer.Trial>, val policy: ThreadPolicy,
                            val contextSize: Int, val ramGb: Double)
 
+data class FormatResult(val name: String, val bytes: Long, val tokens: Int, val seconds: Double,
+                        val loadSeconds: Double, val appBytes: Long, val error: String? = null)
+
 data class RunProgress(val done: Int, val total: Int, val step: String, val startedAt: Long)
 
 /** appBytes: resident memory of the app (includes the model pages mapped from the file). */
@@ -54,6 +57,11 @@ data class UiState(
     val peakAppBytes: Long = 0,
     val result: Prediction? = null,
     val optimizer: OptimizerResult? = null,
+    val formats: List<FormatResult>? = null,
+    /** GGUF file used by the app; null = the verified default. */
+    val gguf: String? = null,
+    /** GGUF files in the model folder, for the model selector. */
+    val availableModels: List<String> = emptyList(),
     val error: String? = null,
     val threads: Int = 4,
     val contextSize: Int = 2048,
@@ -72,7 +80,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         prefixCache = prefs.getBoolean("prefixCache", true),
         threadPolicy = ThreadPolicy.decode(prefs.getString("threadPolicy", null)),
         autoThreads = prefs.getBoolean("autoThreads", true),
+        gguf = prefs.getString("gguf", null),
     ))
+
+    private fun modelFile(): java.io.File =
+        _state.value.gguf?.let { java.io.File(store.dir, it) }?.takeIf { it.isFile } ?: store.file(ModelStore.GGUF)
 
     private fun threadsForCurrentSettings(): (Int) -> Int {
         val s = _state.value
@@ -199,11 +211,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 handle = 0L
                 predictor = null
                 val h = Head.load(store.file(ModelStore.HEAD))
-                handle = Native.load(store.file(ModelStore.GGUF).absolutePath, s.contextSize, s.threads)
+                handle = Native.load(modelFile().absolutePath, s.contextSize, s.threads)
                 head = h
                 predictor = Predictor(handle, h).also { it.threadsFor = threadsForCurrentSettings() }
             }
-            _state.update { it.copy(model = ModelState.Ready) }
+            _state.update { it.copy(model = ModelState.Ready, availableModels = store.ggufFiles().map { f -> f.name }) }
             startPendingRun()
         } catch (e: Throwable) {
             _state.update { it.copy(model = ModelState.Failed("Não consegui carregar o modelo: ${e.message}")) }
@@ -282,6 +294,66 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Loads each GGUF in the model folder in turn (the current one is freed first, so only one
+     * is in memory) and times the same chunk with each, then reloads the model in use.
+     */
+    fun testFormats() {
+        val hd = head ?: return
+        if (handle == 0L || _state.value.running != null) return
+        val files = store.ggufFiles()
+        val started = android.os.SystemClock.elapsedRealtime()
+        _state.update { it.copy(running = RunProgress(0, files.size, "Começando", started), formats = null,
+                                result = null, optimizer = null, error = null, peakAppBytes = it.memory?.appBytes ?: 0) }
+        viewModelScope.launch {
+            val example = _state.value.examples.firstOrNull { it.file.startsWith("02-") } ?: _state.value.examples.first()
+            val request = Json.parse(example.json) as com.openjev.mobile.jev.JsonObject
+            val record = com.openjev.mobile.jev.Api.compileRequest(request["state"]!!, request["questions"]).first()
+            val prompt = hd.promptPrefix + com.openjev.mobile.jev.Api.candidatePrompts(record).first() + hd.promptSuffix
+            val s = _state.value
+            val threads = s.threadPolicy?.takeIf { s.autoThreads }?.threads?.last() ?: s.threads
+            val results = withContext(Dispatchers.IO) {
+                Native.free(handle); handle = 0L; predictor = null
+                files.mapIndexed { i, f ->
+                    _state.update { it.copy(running = RunProgress(i, files.size, "Carregando ${f.name}", started)) }
+                    try {
+                        val t0 = System.nanoTime()
+                        val h = Native.load(f.absolutePath, s.contextSize, threads)
+                        val load = (System.nanoTime() - t0) / 1e9
+                        try {
+                            val tokens = Native.tokenize(h, prompt)
+                            _state.update { it.copy(running = RunProgress(i, files.size, "Aquecendo ${f.name}", started)) }
+                            Native.hiddenState(h, tokens)
+                            _state.update { it.copy(running = RunProgress(i, files.size, "Medindo ${f.name} (${tokens.size} tokens)", started)) }
+                            val secs = (0 until 2).minOf {
+                                val t1 = System.nanoTime(); Native.hiddenState(h, tokens); (System.nanoTime() - t1) / 1e9
+                            }
+                            FormatResult(f.name, f.length(), tokens.size, secs, load, readMemory().appBytes)
+                        } finally {
+                            Native.free(h)
+                        }
+                    } catch (e: Throwable) {
+                        FormatResult(f.name, f.length(), 0, 0.0, 0.0, 0, e.message ?: e.toString())
+                    }
+                }
+            }
+            results.forEach {
+                android.util.Log.i("openjev", "format ${it.name} bytes=${it.bytes} tokens=${it.tokens} " +
+                    "seconds=${"%.3f".format(java.util.Locale.ROOT, it.seconds)} load=${"%.1f".format(java.util.Locale.ROOT, it.loadSeconds)} " +
+                    "rss=${it.appBytes} threads=$threads error=${it.error}")
+            }
+            _state.update { it.copy(running = null, formats = results) }
+            loadModel()
+        }
+    }
+
+    fun useFormat(name: String?) {
+        if (_state.value.running != null) return
+        prefs.edit().putString("gguf", name).apply()
+        _state.update { it.copy(gguf = name) }
+        viewModelScope.launch { loadModel() }
+    }
+
     fun run() {
         val p = predictor ?: return
         if (_state.value.running != null) return
@@ -300,6 +372,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _state.value.threadPolicy?.takeIf { _state.value.autoThreads }?.encode() ?: _state.value.threads
                 } ${"%.1f".format(java.util.Locale.ROOT, result.seconds)}s " +
                     result.answers.joinToString { (id, a) -> "$id=" + a.probabilities.joinToString("/") { (k, v) -> "$k:$v" } })
+                android.util.Log.i("openjev", "profile ${_state.value.selected} total=${"%.2f".format(java.util.Locale.ROOT, result.seconds)}s " +
+                    "decoded=${result.decodedTokens}tok of ${result.inputTokens} ${result.profile.describe()}")
                 _state.update { it.copy(result = result, running = null) }
             } catch (e: Throwable) {
                 _state.update { it.copy(error = e.message ?: e.toString(), running = null) }
