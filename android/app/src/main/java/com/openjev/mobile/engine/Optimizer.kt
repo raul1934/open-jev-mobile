@@ -29,23 +29,62 @@ object DeviceInfo {
     fun describe(): String = clusters().joinToString(" + ") { "${it.cores}×${"%.1f".format(it.maxKHz / 1e6)} GHz" }
 }
 
-/** Times one fixed prompt with each thread count and keeps the fastest. */
-class Optimizer(private val handle: Long) {
-    data class Trial(val threads: Int, val seconds: Double)
+/**
+ * Best thread count per chunk size, measured on this device. A chunk of n tokens uses the
+ * entry for the largest measured size <= n (the smallest size below that).
+ */
+data class ThreadPolicy(val sizes: List<Int>, val threads: List<Int>) {
+    fun threadsFor(tokens: Int): Int {
+        var t = threads.first()
+        for (i in sizes.indices) if (tokens >= sizes[i]) t = threads[i]
+        return t
+    }
 
-    fun run(tokens: IntArray, candidates: List<Int>, step: (done: Int, text: String) -> Unit): List<Trial> {
-        step(0, "Aquecendo o modelo (carregando os pesos na memória)")
+    fun encode() = sizes.zip(threads).joinToString(",") { "${it.first}:${it.second}" }
+
+    fun describe() = sizes.zip(threads).joinToString(" · ") { "${it.first}+ tokens → ${it.second}" }
+
+    companion object {
+        fun decode(text: String?): ThreadPolicy? = runCatching {
+            val pairs = text!!.split(",").map { it.split(":").let { (s, t) -> s.toInt() to t.toInt() } }
+            ThreadPolicy(pairs.map { it.first }, pairs.map { it.second })
+        }.getOrNull()
+    }
+}
+
+/** Times chunks of several sizes with each thread count; the fastest per size becomes the policy. */
+class Optimizer(private val handle: Long) {
+    data class Trial(val tokens: Int, val threads: Int, val seconds: Double)
+
+    companion object {
+        val SIZES = listOf(16, 32, 64, 160)
+    }
+
+    fun run(tokens: IntArray, candidates: List<Int>, step: (done: Int, total: Int, text: String) -> Unit): List<Trial> {
+        val sizes = SIZES.map { minOf(it, tokens.size) }.distinct()
+        val total = sizes.size * candidates.size
+        step(0, total, "Aquecendo o modelo (carregando os pesos na memória)")
         Native.hiddenState(handle, tokens)
-        return candidates.mapIndexed { i, n ->
-            step(i, "Testando $n threads")
-            Native.setThreads(handle, n)
-            // Best of two, so a background hiccup does not decide the result.
-            val seconds = (0 until 2).minOf {
-                val t0 = System.nanoTime()
-                Native.hiddenState(handle, tokens)
-                (System.nanoTime() - t0) / 1e9
+        var done = 0
+        return sizes.flatMap { size ->
+            val chunk = tokens.copyOfRange(0, size)
+            candidates.map { n ->
+                step(done, total, "Testando $size tokens com $n threads")
+                Native.setThreads(handle, n)
+                // Best of two, so a background hiccup does not decide the result.
+                val seconds = (0 until 2).minOf {
+                    val t0 = System.nanoTime()
+                    Native.hiddenState(handle, chunk)
+                    (System.nanoTime() - t0) / 1e9
+                }
+                done++
+                Trial(size, n, seconds)
             }
-            Trial(n, seconds)
         }
+    }
+
+    fun policy(trials: List<Trial>): ThreadPolicy {
+        val bySize = trials.groupBy { it.tokens }.toSortedMap()
+        return ThreadPolicy(bySize.keys.toList(), bySize.values.map { list -> list.minBy { it.seconds }.threads })
     }
 }

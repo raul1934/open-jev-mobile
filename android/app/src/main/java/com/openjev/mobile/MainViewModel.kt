@@ -9,6 +9,8 @@ import com.openjev.mobile.engine.Head
 import com.openjev.mobile.engine.DeviceInfo
 import com.openjev.mobile.engine.ModelStore
 import com.openjev.mobile.engine.Optimizer
+import com.openjev.mobile.engine.SystemMonitor
+import com.openjev.mobile.engine.ThreadPolicy
 import com.openjev.mobile.engine.Native
 import com.openjev.mobile.engine.Prediction
 import com.openjev.mobile.engine.Predictor
@@ -32,7 +34,7 @@ sealed interface ModelState {
 
 data class Example(val file: String, val json: String)
 
-data class OptimizerResult(val cpu: String, val trials: List<Optimizer.Trial>, val best: Int,
+data class OptimizerResult(val cpu: String, val trials: List<Optimizer.Trial>, val policy: ThreadPolicy,
                            val contextSize: Int, val ramGb: Double)
 
 data class RunProgress(val done: Int, val total: Int, val step: String, val startedAt: Long)
@@ -48,6 +50,7 @@ data class UiState(
     val running: RunProgress? = null,
     val now: Long = 0,
     val memory: Memory? = null,
+    val system: SystemMonitor.Snapshot? = null,
     val peakAppBytes: Long = 0,
     val result: Prediction? = null,
     val optimizer: OptimizerResult? = null,
@@ -55,6 +58,9 @@ data class UiState(
     val threads: Int = 4,
     val contextSize: Int = 2048,
     val prefixCache: Boolean = true,
+    /** Measured by the optimizer; used when [autoThreads] is on. */
+    val threadPolicy: ThreadPolicy? = null,
+    val autoThreads: Boolean = true,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -64,7 +70,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         threads = prefs.getInt("threads", minOf(4, Runtime.getRuntime().availableProcessors())),
         contextSize = prefs.getInt("ctx", 2048),
         prefixCache = prefs.getBoolean("prefixCache", true),
+        threadPolicy = ThreadPolicy.decode(prefs.getString("threadPolicy", null)),
+        autoThreads = prefs.getBoolean("autoThreads", true),
     ))
+
+    private fun threadsForCurrentSettings(): (Int) -> Int {
+        val s = _state.value
+        val policy = s.threadPolicy
+        return if (s.autoThreads && policy != null) policy::threadsFor else { _ -> s.threads }
+    }
     val state: StateFlow<UiState> = _state
 
     private var handle = 0L
@@ -72,6 +86,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var predictor: Predictor? = null
 
     private val activityManager = app.getSystemService(android.app.ActivityManager::class.java)
+    private val monitor = SystemMonitor(app)
 
     private fun readMemory(): Memory {
         // VmRSS from /proc is cheap enough to poll; Debug.getMemoryInfo() takes tens of ms.
@@ -89,11 +104,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.Default) {
             while (true) {
                 val m = readMemory()
+                val sys = monitor.snapshot()
                 _state.update {
-                    it.copy(now = android.os.SystemClock.elapsedRealtime(), memory = m,
+                    it.copy(now = android.os.SystemClock.elapsedRealtime(), memory = m, system = sys,
                             peakAppBytes = if (it.running != null) maxOf(it.peakAppBytes, m.appBytes) else it.peakAppBytes)
                 }
-                delay(if (_state.value.running != null) 250 else 2000)
+                delay(if (_state.value.running != null) 500 else 2000)
             }
         }
         viewModelScope.launch {
@@ -185,7 +201,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val h = Head.load(store.file(ModelStore.HEAD))
                 handle = Native.load(store.file(ModelStore.GGUF).absolutePath, s.contextSize, s.threads)
                 head = h
-                predictor = Predictor(handle, h)
+                predictor = Predictor(handle, h).also { it.threadsFor = threadsForCurrentSettings() }
             }
             _state.update { it.copy(model = ModelState.Ready) }
             startPendingRun()
@@ -198,18 +214,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (store.isReady()) loadModel() else _state.update { it.copy(model = ModelState.Missing) }
     }
 
-    fun applySettings(threads: Int, contextSize: Int, prefixCache: Boolean) {
+    fun applySettings(threads: Int, contextSize: Int, prefixCache: Boolean, autoThreads: Boolean = _state.value.autoThreads) {
         if (_state.value.running != null) return // the native context is in use
-        val reload = threads != _state.value.threads || contextSize != _state.value.contextSize
-        prefs.edit().putInt("threads", threads).putInt("ctx", contextSize).putBoolean("prefixCache", prefixCache).apply()
-        _state.update { it.copy(threads = threads, contextSize = contextSize, prefixCache = prefixCache) }
+        // The thread count changes per chunk without reloading; only the context size needs a reload.
+        val reload = contextSize != _state.value.contextSize
+        prefs.edit().putInt("threads", threads).putInt("ctx", contextSize).putBoolean("prefixCache", prefixCache)
+            .putBoolean("autoThreads", autoThreads).apply()
+        _state.update { it.copy(threads = threads, contextSize = contextSize, prefixCache = prefixCache, autoThreads = autoThreads) }
+        predictor?.threadsFor = threadsForCurrentSettings()
         if (reload && store.isReady()) viewModelScope.launch { loadModel() }
     }
 
     /** Test hook: `--ei threads 2 --ez cache false` alongside `--es run <file>`. */
     fun overrideSettings(threads: Int?, prefixCache: Boolean?) {
         val s = _state.value
-        applySettings(threads ?: s.threads, s.contextSize, prefixCache ?: s.prefixCache)
+        applySettings(threads ?: s.threads, s.contextSize, prefixCache ?: s.prefixCache,
+                      autoThreads = if (threads != null) false else s.autoThreads)
     }
 
     /**
@@ -222,7 +242,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (h == 0L || _state.value.running != null) return
         val candidates = DeviceInfo.threadCandidates()
         val started = android.os.SystemClock.elapsedRealtime()
-        _state.update { it.copy(running = RunProgress(0, candidates.size, "Começando", started), optimizer = null,
+        _state.update { it.copy(running = RunProgress(0, 0, "Começando", started), optimizer = null,
                                 result = null, error = null, peakAppBytes = it.memory?.appBytes ?: 0) }
         viewModelScope.launch {
             try {
@@ -231,24 +251,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val request = Json.parse(example.json) as com.openjev.mobile.jev.JsonObject
                 val record = com.openjev.mobile.jev.Api.compileRequest(request["state"]!!, request["questions"]).first()
                 val prompt = com.openjev.mobile.jev.Api.candidatePrompts(record).first()
+                val optimizer = Optimizer(h)
                 val trials = withContext(Dispatchers.Default) {
                     val tokens = Native.tokenize(h, hd.promptPrefix + prompt + hd.promptSuffix)
-                    Optimizer(h).run(tokens, candidates) { done, text ->
-                        _state.update { it.copy(running = RunProgress(done, candidates.size, "$text (${tokens.size} tokens)", started)) }
+                    optimizer.run(tokens, candidates) { done, total, text ->
+                        _state.update { it.copy(running = RunProgress(done, total, text, started)) }
                     }
                 }
-                val best = trials.minBy { it.seconds }.threads
+                predictor?.forgetThreads()
+                val policy = optimizer.policy(trials)
+                val best = policy.threads.last()  // fastest for the longest chunk; used if automatic is turned off
                 val ramBytes = _state.value.memory?.totalBytes ?: 0L
                 val ctx = if (ramBytes >= 6_000_000_000L) 4096 else 2048
-                withContext(Dispatchers.Default) { Native.setThreads(h, best) }
                 val reload = ctx != _state.value.contextSize
-                prefs.edit().putInt("threads", best).putInt("ctx", ctx).putBoolean("prefixCache", true).apply()
+                prefs.edit().putInt("threads", best).putInt("ctx", ctx).putBoolean("prefixCache", true)
+                    .putString("threadPolicy", policy.encode()).putBoolean("autoThreads", true).apply()
                 _state.update {
                     it.copy(running = null, threads = best, contextSize = ctx, prefixCache = true,
-                            optimizer = OptimizerResult(DeviceInfo.describe(), trials, best, ctx, ramBytes / 1e9))
+                            threadPolicy = policy, autoThreads = true,
+                            optimizer = OptimizerResult(DeviceInfo.describe(), trials, policy, ctx, ramBytes / 1e9))
                 }
+                predictor?.threadsFor = threadsForCurrentSettings()
                 android.util.Log.i("openjev", "optimizer ${DeviceInfo.describe()} " +
-                    trials.joinToString { "${it.threads}t=${"%.2f".format(it.seconds)}s" } + " best=$best ctx=$ctx")
+                    trials.joinToString { "${it.tokens}tok/${it.threads}t=${"%.3f".format(java.util.Locale.ROOT, it.seconds)}s" } +
+                    " policy=${policy.encode()} ctx=$ctx")
                 if (reload) loadModel()
             } catch (e: Throwable) {
                 _state.update { it.copy(error = "Otimização falhou: ${e.message}", running = null) }
@@ -270,7 +296,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         _state.update { it.copy(running = RunProgress(done, total, step, started)) }
                     }
                 }
-                android.util.Log.i("openjev", "prediction ${_state.value.selected} cache=${_state.value.prefixCache} threads=${_state.value.threads} ${"%.1f".format(result.seconds)}s " +
+                android.util.Log.i("openjev", "prediction ${_state.value.selected} cache=${_state.value.prefixCache} threads=${
+                    _state.value.threadPolicy?.takeIf { _state.value.autoThreads }?.encode() ?: _state.value.threads
+                } ${"%.1f".format(java.util.Locale.ROOT, result.seconds)}s " +
                     result.answers.joinToString { (id, a) -> "$id=" + a.probabilities.joinToString("/") { (k, v) -> "$k:$v" } })
                 _state.update { it.copy(result = result, running = null) }
             } catch (e: Throwable) {

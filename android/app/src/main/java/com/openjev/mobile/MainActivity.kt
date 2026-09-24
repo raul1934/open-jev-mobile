@@ -134,9 +134,9 @@ private fun Screen(state: UiState, vm: MainViewModel) {
         state,
         onDismiss = { showSettings = false },
         onOptimize = { showSettings = false; vm.optimize() },
-    ) { threads, ctx, cache ->
+    ) { threads, ctx, cache, auto ->
         showSettings = false
-        vm.applySettings(threads, ctx, cache)
+        vm.applySettings(threads, ctx, cache, auto)
     }
 }
 
@@ -168,6 +168,7 @@ private fun StatusPanel(state: UiState) {
                      if (state.prefixCache) " · contexto reaproveitado" else "",
                      style = MaterialTheme.typography.bodyMedium)
             }
+            state.system?.let { DeviceLines(it) }
             state.memory?.let { m ->
                 Text(
                     "Memória do app: ${gb(m.appBytes)}" +
@@ -180,6 +181,46 @@ private fun StatusPanel(state: UiState) {
                                 color = MaterialTheme.colorScheme.error)
             }
         }
+    }
+}
+
+/** CPU use, clocks, GPU and temperatures; lines are skipped when Android does not expose a value. */
+@Composable
+private fun DeviceLines(s: com.openjev.mobile.engine.SystemMonitor.Snapshot) {
+    val small = MaterialTheme.typography.bodySmall
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    fun c(v: Double?) = v?.let { String.format(Locale.ROOT, "%.0f °C", it) }
+    val cpu = buildList {
+        s.appCores?.let { add("app usando " + String.format(Locale.ROOT, "%.1f", it) + " de ${s.cores} núcleos") }
+        if (s.coreMHz.isNotEmpty()) {
+            // Group identical clocks: "2×2208 + 6×1804 MHz".
+            add(s.coreMHz.groupingBy { it }.eachCount().entries.sortedByDescending { it.key }
+                .joinToString(" + ") { "${it.value}×${it.key}" } + " MHz")
+        }
+        c(s.cpuTempC)?.let { add(it) }
+    }
+    if (cpu.isNotEmpty()) Text("CPU: " + cpu.joinToString(" · "), style = small, color = muted)
+    val gpu = buildList {
+        add("não usada pelo modelo")
+        s.gpuBusyPercent?.let { add("uso $it%") }
+        s.gpuMHz?.let { add("$it MHz") }
+        c(s.gpuTempC)?.let { add(it) }
+    }
+    Text("GPU: " + gpu.joinToString(" · "), style = small, color = muted)
+    val temps = buildList {
+        c(s.skinTempC)?.let { add("superfície $it") }
+        c(s.batteryTempC)?.let { add("bateria $it") }
+    }
+    if (temps.isNotEmpty()) Text("Temperatura: " + temps.joinToString(" · "), style = small, color = muted)
+    s.thermalStatus?.let { status ->
+        val name = when (status) {
+            0 -> "normal"; 1 -> "leve"; 2 -> "moderado"; 3 -> "severo"; 4 -> "crítico"; 5 -> "emergência"
+            else -> "desligando"
+        }
+        val headroom = s.thermalHeadroom?.let { " · " + String.format(Locale.ROOT, "%.0f%%", it * 100) + " do limite" } ?: ""
+        val throttling = status >= 2 || (s.thermalHeadroom ?: 0f) >= 1f
+        Text("Térmico: $name$headroom" + if (throttling) " · o sistema está reduzindo a velocidade" else "",
+             style = small, color = if (throttling) MaterialTheme.colorScheme.error else muted)
     }
 }
 
@@ -262,13 +303,15 @@ private fun OptimizerCard(r: OptimizerResult) {
             Text("Otimização do aparelho", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text("CPU: ${r.cpu} · RAM: ${String.format(Locale.ROOT, "%.1f", r.ramGb)} GB",
                  style = MaterialTheme.typography.bodySmall)
-            val slowest = r.trials.maxOf { it.seconds }
-            r.trials.forEach { t ->
-                Bar("${t.threads} threads" + if (t.threads == r.best) "  ← mais rápido" else "",
-                    t.seconds / slowest, value = seconds(t.seconds))
+            // One row per chunk size: time with each thread count, the fastest marked.
+            r.trials.groupBy { it.tokens }.toSortedMap().forEach { (tokens, list) ->
+                val best = list.minBy { it.seconds }
+                Text("$tokens tokens: " + list.joinToString("  ") {
+                    "${it.threads}t ${String.format(Locale.ROOT, "%.2f", it.seconds)}s" + if (it == best) " ✓" else ""
+                }, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
             }
-            Text("Aplicado: ${r.best} threads, contexto de ${r.contextSize} tokens, reaproveitar contexto ligado.",
-                 style = MaterialTheme.typography.bodyMedium)
+            Text("Aplicado: threads automáticas (${r.policy.describe()}), contexto de ${r.contextSize} tokens, " +
+                 "reaproveitar contexto ligado.", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -318,24 +361,35 @@ private fun Bar(label: String, p: Double, value: String = pct(p)) {
 
 @Composable
 private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onOptimize: () -> Unit,
-                           onApply: (Int, Int, Boolean) -> Unit) {
+                           onApply: (Int, Int, Boolean, Boolean) -> Unit) {
     val cores = Runtime.getRuntime().availableProcessors()
     var threads by remember { mutableFloatStateOf(state.threads.toFloat()) }
     var ctx by remember { mutableStateOf(state.contextSize) }
     var cache by remember { mutableStateOf(state.prefixCache) }
+    var auto by remember { mutableStateOf(state.autoThreads) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = { onApply(threads.roundToInt(), ctx, cache) }) { Text("Aplicar") } },
+        confirmButton = { TextButton(onClick = { onApply(threads.roundToInt(), ctx, cache, auto) }) { Text("Aplicar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
         title = { Text("Ajustes") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onOptimize, enabled = state.model == ModelState.Ready,
                        modifier = Modifier.fillMaxWidth()) { Text("Otimizar para este aparelho") }
-                Text("Testa o modelo com diferentes números de threads (leva cerca de 1 minuto), " +
-                     "escolhe o mais rápido e ajusta o resto para a memória do aparelho.",
+                Text("Mede trechos de 16 a 160 tokens com diferentes números de threads (1 a 2 minutos), " +
+                     "escolhe o mais rápido para cada tamanho e ajusta o resto para a memória do aparelho.",
                      style = MaterialTheme.typography.bodySmall)
-                Text("Threads da CPU: ${threads.roundToInt()} (o aparelho tem $cores núcleos)")
+                val policy = state.threadPolicy
+                Row {
+                    Column(Modifier.weight(1f)) {
+                        Text("Threads automáticas por trecho")
+                        Text(policy?.describe() ?: "Rode a otimização primeiro.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = auto && policy != null, onCheckedChange = { auto = it }, enabled = policy != null)
+                }
+                Text(if (auto && policy != null) "Threads fixas (usadas com o automático desligado):" else "Threads da CPU:",
+                     style = MaterialTheme.typography.bodySmall)
+                Text("Threads: ${threads.roundToInt()} (o aparelho tem $cores núcleos)")
                 Slider(value = threads, onValueChange = { threads = it }, valueRange = 1f..cores.toFloat(),
                        steps = (cores - 2).coerceAtLeast(0))
                 Text("Tamanho máximo do prompt (tokens). 4096 aceita textos maiores, mas usa mais memória.")

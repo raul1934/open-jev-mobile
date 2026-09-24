@@ -45,6 +45,31 @@ data class Prediction(val answers: List<Pair<String, Answer>>, val candidates: I
 class Predictor(private val handle: Long, private val head: Head) {
     private val maxLength = minOf(head.maxLength, Native.contextSize(handle))
 
+    /** Thread count for a chunk of n tokens (a measured [ThreadPolicy], or a fixed number). */
+    var threadsFor: (Int) -> Int = { 4 }
+    private var currentThreads = -1
+
+    private fun useThreadsFor(tokens: Int) {
+        val n = threadsFor(tokens)
+        if (n != currentThreads) {
+            Native.setThreads(handle, n)
+            currentThreads = n
+        }
+    }
+
+    /** Called when something else (the optimizer) changed the native thread count. */
+    fun forgetThreads() { currentThreads = -1 }
+
+    private fun decodeAll(tokens: IntArray): FloatArray {
+        useThreadsFor(tokens.size)
+        return Native.hiddenState(handle, tokens)
+    }
+
+    private fun extend(tokens: IntArray, start: Int, wantHidden: Boolean): FloatArray? {
+        useThreadsFor(tokens.size)
+        return Native.extend(handle, tokens, start, wantHidden)
+    }
+
     /**
      * With [prefixCache], tokens shared by every prompt of the request (the context) are
      * computed once, tokens shared by one question's candidates once per question, and
@@ -77,7 +102,7 @@ class Predictor(private val handle: Long, private val head: Head) {
                      else tokens.mapIndexed { q, group ->
                          group.mapIndexed { j, t ->
                              step(optionStep(ids[q], j, group.size, t.size))
-                             Native.hiddenState(handle, t).also { tick() }
+                             decodeAll(t).also { tick() }
                          }
                      }
         onProgress(done, total, "Calculando as probabilidades")
@@ -112,7 +137,7 @@ class Predictor(private val handle: Long, private val head: Head) {
         Native.reset(handle)
         if (shared > 0) {
             step("Lendo o contexto compartilhado ($shared tokens)")
-            Native.extend(handle, tokens[0][0].copyOfRange(0, shared), 0, false)
+            extend(tokens[0][0].copyOfRange(0, shared), 0, false)
             Native.saveState(handle, 0)
         }
         fun restoreShared() = if (shared > 0) Native.restoreState(handle, 0) else Native.reset(handle)
@@ -121,13 +146,13 @@ class Predictor(private val handle: Long, private val head: Head) {
             if (index > 0) restoreShared()
             if (own > shared) {
                 step("\"${ids[index]}\": lendo a pergunta (${own - shared} tokens)")
-                Native.extend(handle, group[0].copyOfRange(shared, own), shared, false)
+                extend(group[0].copyOfRange(shared, own), shared, false)
                 if (group.size > 1) Native.saveState(handle, 1)
             }
             group.mapIndexed { j, tokens ->
                 if (j > 0) if (own > shared) Native.restoreState(handle, 1) else restoreShared()
                 step(optionStep(ids[index], j, group.size, tokens.size - own))
-                Native.extend(handle, tokens.copyOfRange(own, tokens.size), own, true)!!.also { tick() }
+                extend(tokens.copyOfRange(own, tokens.size), own, true)!!.also { tick() }
             }
         }
     }
