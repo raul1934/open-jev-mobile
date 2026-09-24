@@ -233,3 +233,80 @@ Java_com_openjev_mobile_engine_Native_free(JNIEnv *, jobject, jlong handle) {
     llama_model_free(e->model);
     delete e;
 }
+
+// ---------------------------------------------------------------------------
+// Sentence encoder for the scam detector (multilingual-e5-small, BERT + XLM-R
+// vocabulary). Mean-pooled embedding of the whole text, like
+// `llama-server --embeddings --pooling mean` (checked against
+// sentence-transformers: cosine 0.9999 in Q8_0). The caller L2-normalizes.
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_openjev_mobile_engine_Native_loadEncoder(JNIEnv * env, jobject, jstring path, jint n_threads) {
+    llama_model_params mparams = llama_model_default_params();
+    mparams.n_gpu_layers = 0;
+    mparams.load_mode = LLAMA_LOAD_MODE_MMAP;
+    llama_model * model = llama_model_load_from_file(to_string(env, path).c_str(), mparams);
+    if (!model) {
+        throw_java(env, "could not load the encoder file");
+        return 0;
+    }
+    llama_context_params cparams = llama_context_default_params();
+    cparams.n_ctx = 512;  // e5 was trained with at most 512 tokens
+    cparams.n_batch = 512;
+    cparams.n_ubatch = 512;
+    cparams.n_seq_max = 1;
+    cparams.n_threads = n_threads;
+    cparams.n_threads_batch = n_threads;
+    cparams.embeddings = true;
+    cparams.pooling_type = LLAMA_POOLING_TYPE_MEAN;
+    llama_context * ctx = llama_init_from_model(model, cparams);
+    if (!ctx) {
+        llama_model_free(model);
+        throw_java(env, "could not create the encoder context");
+        return 0;
+    }
+    auto * e = new Engine();
+    e->model = model;
+    e->ctx = ctx;
+    e->vocab = llama_model_get_vocab(model);
+    e->n_embd = llama_model_n_embd_out(model);
+    e->n_ctx = static_cast<int>(llama_n_ctx(ctx));
+    LOGI("encoder loaded: n_embd=%d n_ctx=%d", e->n_embd, e->n_ctx);
+    return reinterpret_cast<jlong>(e);
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_openjev_mobile_engine_Native_embed(JNIEnv * env, jobject, jlong handle, jstring jtext) {
+    Engine * e = engine(handle);
+    const std::string text = to_string(env, jtext);
+    // add_special: the encoder expects <s> ... </s> around the text, as sentence-transformers adds.
+    int n = -llama_tokenize(e->vocab, text.c_str(), static_cast<int32_t>(text.size()), nullptr, 0, true, false);
+    std::vector<llama_token> tokens(n);
+    llama_tokenize(e->vocab, text.c_str(), static_cast<int32_t>(text.size()), tokens.data(), n, true, false);
+    if (n > e->n_ctx) {  // same as sentence-transformers: keep the first 511 tokens and the closing </s>
+        const llama_token last = tokens.back();
+        tokens.resize(e->n_ctx);
+        tokens.back() = last;
+        n = e->n_ctx;
+    }
+    if (llama_memory_t mem = llama_get_memory(e->ctx)) llama_memory_clear(mem, true);
+    llama_batch batch = llama_batch_init(n, 0, 1);
+    for (int i = 0; i < n; i++) {
+        batch.token[i] = tokens[i];
+        batch.pos[i] = i;
+        batch.n_seq_id[i] = 1;
+        batch.seq_id[i][0] = 0;
+        batch.logits[i] = true;
+    }
+    batch.n_tokens = n;
+    const int rc = llama_decode(e->ctx, batch);
+    llama_batch_free(batch);
+    const float * embd = rc == 0 ? llama_get_embeddings_seq(e->ctx, 0) : nullptr;
+    if (!embd) {
+        throw_java(env, "encoder failed with code " + std::to_string(rc));
+        return nullptr;
+    }
+    jfloatArray out = env->NewFloatArray(e->n_embd);
+    env->SetFloatArrayRegion(out, 0, e->n_embd, embd);
+    return out;
+}

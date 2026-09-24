@@ -7,6 +7,17 @@ object Native {
     }
 
     external fun init(nativeLibDir: String)
+
+    private var initialized = false
+
+    /** Loads the CPU backends once per process (the app screen and the notification listener share it). */
+    @Synchronized
+    fun ensureInit(nativeLibDir: String) {
+        if (!initialized) {
+            init(nativeLibDir)
+            initialized = true
+        }
+    }
     external fun load(path: String, nCtx: Int, nThreads: Int): Long
     external fun contextSize(handle: Long): Int
     external fun setThreads(handle: Long, threads: Int)
@@ -19,4 +30,8 @@ object Native {
     external fun saveState(handle: Long, slot: Int)
     external fun restoreState(handle: Long, slot: Int)
     external fun free(handle: Long)
+
+    // Scam detector encoder (multilingual-e5-small): mean-pooled, not normalized.
+    external fun loadEncoder(path: String, nThreads: Int): Long
+    external fun embed(handle: Long, text: String): FloatArray
 }

@@ -125,7 +125,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { Native.init(app.applicationInfo.nativeLibraryDir) }
+            withContext(Dispatchers.IO) { Native.ensureInit(app.applicationInfo.nativeLibraryDir) }
             when {
                 store.isReady() -> loadModel()
                 store.progress() is ModelStore.Progress.Running -> watchDownload()

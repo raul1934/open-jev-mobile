@@ -13,3 +13,5 @@ android/app/build/
 android/app/.cxx/
 android/local.properties
 dist/
+fraud/data/cache/
+*.gguf

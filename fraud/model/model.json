@@ -1,0 +1,196 @@
+{
+  "type": "char_wb_hashing_logreg",
+  "n_features": 262144,
+  "ngram_range": [
+    2,
+    5
+  ],
+  "lowercase": true,
+  "strip_accents": "unicode",
+  "norm": "l2",
+  "threshold": 0.5,
+  "weights_file": "weights.bin",
+  "nonzero_weights": 68313,
+  "report": {
+    "C": 4,
+    "train_rows": {
+      "synthetic": 3181,
+      "moz": 1536,
+      "real": 0
+    },
+    "brasil_escrito_a_mao": {
+      "n": 80,
+      "scams": 40,
+      "precision": 0.75,
+      "recall": 0.225,
+      "f1": 0.3462,
+      "auc": 0.8287,
+      "false_positives": 3,
+      "false_negatives": 31,
+      "errors": [
+        [
+          "Mae to sem credito, pega esse numero aqui q é o meu de agora. Preciso de 800 reais pra consertar o carro ate as 5, amanha te passo",
+          1,
+          0.322
+        ],
+        [
+          "Seu Nubank tem uma pendência. O valor do seu limite pode ser cancelado se não confirmar a identidade: nubank-verificar.app/login",
+          1,
+          0.265
+        ],
+        [
+          "Olá, recebemos sua solicitação de empréstimo consignado de R$ 12.000 aprovado. Para liberar, deposite a taxa de seguro de R$ 350 na conta indicada.",
+          1,
+          0.369
+        ],
+        [
+          "INSS: seu benefício está bloqueado para prova de vida. Faça pelo link para não perder o pagamento deste mês: prova-vida-inss.net",
+          1,
+          0.194
+        ],
+        [
+          "Boa noite! Sou a Juliana da central de vendas, identificamos que você pagou duas vezes a sua compra. Posso fazer o estorno agora, só preciso do código que vai chegar no seu celular.",
+          1,
+          0.249
+        ],
+        [
+          "ULTIMO AVISO: seu nome será incluído nos órgãos de proteção ao crédito amanhã. Negocie seu débito com desconto clicando aqui bit.ly/negocia-ja",
+          1,
+          0.41
+        ],
+        [
+          "Seu pacote AliExpress foi bloqueado na alfândega. Taxa de liberação R$ 67,90 via PIX para evitar devolução ao remetente. Chave: liberacaopacotes@gmail.com",
+          1,
+          0.17
+        ],
+        [
+          "Detectamos que seu celular está infectado com 3 vírus. Baixe o antivírus agora para proteger suas contas bancárias: seguranca-celular.apk",
+          1,
+          0.384
+        ],
+        [
+          "Aqui é o gerente da sua agência. Estamos migrando as contas para o novo sistema e preciso que você confirme a senha de 6 dígitos por aqui mesmo.",
+          1,
+          0.265
+        ],
+        [
+          "Oportunidade única: grupo VIP de apostas com 98% de acerto. Entre com depósito mínimo de R$ 100 e fature todo dia. Link na bio",
+          1,
+          0.026
+        ],
+        [
+          "Seu WhatsApp será desativado em 24 horas por falta de verificação. Envie o código de 6 dígitos que você recebeu para manter sua conta.",
+          1,
+          0.104
+        ],
+        [
+          "Pedido de amizade: sou funcionário da loja e seu produto está com desconto de 70% só pra você. Pague por este pix que te envio a nota depois.",
+          1,
+          0.256
+        ],
+        [
+          "vc tem um presente pendente p/ retirar, taxa de entrega simbólica de 9,90, confirma o endereço aq: presente-entrega.store",
+          1,
+          0.075
+        ],
+        [
+          "Sua chave PIX foi usada em outro aparelho. Se não reconhece, ligue imediatamente para 0800 591 0000 e siga as instruções do atendente.",
+          1,
+          0.346
+        ],
+        [
+          "Estou vendendo meu iPhone 15 lacrado por R$ 1.500 porque preciso de dinheiro urgente. Só aceito pix adiantado, entrego em mãos depois.",
+          1,
+          0.078
+        ]
+      ]
+    },
+    "moz_smishing_real": {
+      "n": 1025,
+      "scams": 221,
+      "precision": 0.9457,
+      "recall": 0.9457,
+      "f1": 0.9457,
+      "auc": 0.9956,
+      "false_positives": 12,
+      "false_negatives": 12,
+      "errors": [
+        [
+          "podem mandar com este numero que começa com letra",
+          0,
+          0.541
+        ],
+        [
+          "Boa tarde mãe, peço para mandar o valor para este número vem em nome de MH",
+          0,
+          0.687
+        ],
+        [
+          "mande o valor para este está em meu nome na conta mpesa",
+          0,
+          0.775
+        ],
+        [
+          "Consulta gratis o mini extracto da tua conta com apenas um toque. Baixa a App Meu M-Pesa https://onelink.to/xanf67 e ja esta.",
+          0,
+          0.577
+        ],
+        [
+          "Viva mano, aqui está o nr com MPesa 84565478 é meu número. Pode enviar neste nr",
+          0,
+          0.79
+        ],
+        [
+          "O valor mande para o número 8415546412, em nome de João Paulo.",
+          0,
+          0.698
+        ],
+        [
+          "Peço para mandar o valor neste número na conta mpesa está em meu nome",
+          0,
+          0.838
+        ],
+        [
+          "Sobre a saida. Me da o nome do restaurante .",
+          0,
+          0.63
+        ],
+        [
+          "\nManda o valor neste número,858148365.M-pesa vem em nome da Sara José Vinte Ok.",
+          0,
+          0.98
+        ],
+        [
+          "Manda o valor para esta conta com o nome de Abel",
+          0,
+          0.772
+        ],
+        [
+          "Ja podes pesquisar os teus toques de espera favoritos no portal de Vibratoques, aceda ja https://bit.ly/2Wbzubn .Liga-me +258850784986",
+          0,
+          0.561
+        ],
+        [
+          "Continua a transferir SEM TAXAS entre contas M-Pesa via App Meu M-Pesa ate 15/01/24! E a App Meu M-Pesa nao consome dados. Baixa ja em https://onelink.to/xanf67 .",
+          0,
+          0.539
+        ],
+        [
+          "Bom dia.Peço pra enviares o valor no Mpesa do numero 840769358,esta em nome de Bélia Gulamo.",
+          1,
+          0.454
+        ],
+        [
+          "BOM DIA,PODE ENVIAR AQUELE VALOR PARA ESTE NUMERO 852351768",
+          1,
+          0.295
+        ],
+        [
+          "Boa tarde.Peço pra enviares o valor no Mpesa do número 841075451,esta em nome de Lavumo Picardete.",
+          1,
+          0.402
+        ]
+      ]
+    }
+  }
+}

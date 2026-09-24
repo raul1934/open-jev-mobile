@@ -119,6 +119,7 @@ private fun Screen(state: UiState, vm: MainViewModel) {
             }
             TextButton(onClick = { showSettings = true }, enabled = state.running == null) { Text("Ajustes") }
         }
+        com.openjev.mobile.detector.DetectorCard(busy = state.running != null)
         ModelCard(state.model, vm)
         StatusPanel(state)
         if (state.model == ModelState.Ready) {

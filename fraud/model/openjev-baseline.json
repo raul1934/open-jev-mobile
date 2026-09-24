@@ -1,0 +1,117 @@
+{
+ "n": 80,
+ "scams": 40,
+ "precision": 0.88,
+ "recall": 0.55,
+ "f1": 0.6769,
+ "auc": 0.9256,
+ "false_positives": 3,
+ "false_negatives": 18,
+ "errors": [
+  [
+   "Olá, recebemos sua solicitação de empréstimo consignado de R$ 12.000 aprovado. Para liberar, deposite a taxa de seguro de R$ 350 na conta indicada.",
+   1,
+   0.369
+  ],
+  [
+   "Parabéns, você é o cliente número 1.000.000 e ganhou uma TV 55 polegadas. Para receber informe nome, CPF e cartão para pagar o envio.",
+   1,
+   0.48
+  ],
+  [
+   "Seu pacote AliExpress foi bloqueado na alfândega. Taxa de liberação R$ 67,90 via PIX para evitar devolução ao remetente. Chave: liberacaopacotes@gmail.com",
+   1,
+   0.231
+  ],
+  [
+   "Oi, é o seu filho. Estou usando o celular de um amigo porque o meu quebrou. Não conta pra ninguém, mas preciso que você pague um boleto pra mim hoje, é muito importante",
+   1,
+   0.224
+  ],
+  [
+   "Você foi aprovado para o novo auxílio de R$ 600 do governo federal. Cadastre sua chave pix no site para receber ainda hoje.",
+   1,
+   0.449
+  ],
+  [
+   "Pedido de amizade: sou funcionário da loja e seu produto está com desconto de 70% só pra você. Pague por este pix que te envio a nota depois.",
+   1,
+   0.308
+  ],
+  [
+   "vc tem um presente pendente p/ retirar, taxa de entrega simbólica de 9,90, confirma o endereço aq: presente-entrega.store",
+   1,
+   0.153
+  ],
+  [
+   "Estou vendendo meu iPhone 15 lacrado por R$ 1.500 porque preciso de dinheiro urgente. Só aceito pix adiantado, entrego em mãos depois.",
+   1,
+   0.273
+  ],
+  [
+   "Ei, peguei seu contato no grupo do condomínio. Faço investimento em moeda digital e rendeu 40% esse mês, quer entrar? É só mandar a partir de 200",
+   1,
+   0.31
+  ],
+  [
+   "Oi tia, tudo bem? Aqui é a Bia, mudei de número. Tô precisando pagar a matrícula da faculdade e falta 450, consegue me ajudar? Devolvo sexta",
+   1,
+   0.21
+  ],
+  [
+   "PROCON informa: você tem direito a indenização de R$ 5.000 por cobrança indevida da operadora. Para receber, pague as custas de R$ 120.",
+   1,
+   0.266
+  ],
+  [
+   "Seu veículo foi flagrado por radar e a notificação está disponível. Evite a suspensão da CNH pagando agora com 40% de desconto: detran-multas.site",
+   1,
+   0.329
+  ],
+  [
+   "Atenção: compra de R$ 3.987,00 no Pix aguardando autorização. Caso não tenha sido você, responda NÃO e um atendente entrará em contato.",
+   1,
+   0.32
+  ],
+  [
+   "Você ganhou um cupom de R$ 500 no iFood! Só responder a pesquisa rápida e informar o cartão para validação",
+   1,
+   0.426
+  ],
+  [
+   "Promoção relâmpago Havaianas: 3 pares por R$ 29,90 só hoje! Compre em havaianas-oficial-outlet.shop",
+   1,
+   0.297
+  ],
+  [
+   "Seu banco está oferecendo portabilidade com juros zero. Me passa sua agência, conta e senha que eu faço o processo para você.",
+   1,
+   0.329
+  ],
+  [
+   "Sua encomenda dos Correios foi taxada em R$ 43,50. Pague o DARF pelo QR code em anexo ou será devolvida em 3 dias.",
+   1,
+   0.306
+  ],
+  [
+   "pai perdi a carteira na viagem, to num posto sem dinheiro, manda 300 no pix desse numero que é do frentista, é urgente",
+   1,
+   0.224
+  ],
+  [
+   "Seu código de segurança Mercado Pago é 482913. Não compartilhe este código com ninguém, nem com funcionários do Mercado Pago.",
+   0,
+   0.787
+  ],
+  [
+   "Sua senha do app foi alterada com sucesso. Se não foi você, ligue para o número no verso do seu cartão.",
+   0,
+   0.757
+  ],
+  [
+   "Uber: seu código de verificação é 3829. Não compartilhe.",
+   0,
+   0.885
+  ]
+ ]
+}
