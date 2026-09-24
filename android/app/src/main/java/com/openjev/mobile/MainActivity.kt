@@ -33,6 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -66,13 +67,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        handleTestIntent(intent)
+    }
+
+    private fun handleTestIntent(intent: android.content.Intent) {
+        val threads = if (intent.hasExtra("threads")) intent.getIntExtra("threads", 4) else null
+        val cache = if (intent.hasExtra("cache")) intent.getBooleanExtra("cache", true) else null
+        if (threads != null || cache != null) viewModel.overrideSettings(threads, cache)
         intent.getStringExtra("run")?.let(viewModel::runWhenReady)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        intent?.getStringExtra("run")?.let(viewModel::runWhenReady)
+        intent?.let(::handleTestIntent)
         setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface(Modifier.fillMaxSize()) {
@@ -103,31 +111,66 @@ private fun Screen(state: UiState, vm: MainViewModel) {
             TextButton(onClick = { showSettings = true }, enabled = state.running == null) { Text("Ajustes") }
         }
         ModelCard(state.model, vm)
+        StatusPanel(state)
         if (state.model == ModelState.Ready) {
             RequestEditor(state, vm)
-            state.running?.let { (done, total) ->
-                Column {
-                    Text("Avaliando candidato $done de $total…", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(6.dp))
-                    LinearProgressIndicator(progress = { if (total == 0) 0f else done / total.toFloat() }, Modifier.fillMaxWidth())
-                }
-            }
             state.error?.let { Text("Erro: $it", color = MaterialTheme.colorScheme.error) }
             state.result?.let { result ->
                 result.answers.forEach { (id, answer) -> AnswerCard(id, answer) }
-                Text(
-                    "${result.candidates} candidatos, ${result.inputTokens} tokens, " +
-                        String.format(Locale.ROOT, "%.1f s", result.seconds),
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
         }
     }
-    if (showSettings) SettingsDialog(state, onDismiss = { showSettings = false }) { threads, ctx ->
+    if (showSettings) SettingsDialog(state, onDismiss = { showSettings = false }) { threads, ctx, cache ->
         showSettings = false
-        vm.applySettings(threads, ctx)
+        vm.applySettings(threads, ctx, cache)
     }
 }
+
+/** Live timer, current step and memory; after a run, its time, time per option and memory peak. */
+@Composable
+private fun StatusPanel(state: UiState) {
+    val running = state.running
+    val result = state.result
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (running != null) {
+                val elapsed = (state.now - running.startedAt).coerceAtLeast(0) / 1000.0
+                Row {
+                    Text("Rodando", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                    Text(seconds(elapsed), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold,
+                         style = MaterialTheme.typography.titleMedium)
+                }
+                Text(running.step + "…", style = MaterialTheme.typography.bodyMedium)
+                LinearProgressIndicator(
+                    progress = { if (running.total == 0) 0f else running.done / running.total.toFloat() },
+                    Modifier.fillMaxWidth(),
+                )
+                Text("${running.done} de ${running.total} opções prontas" +
+                     if (running.done > 0) " · ${seconds(elapsed / running.done)} por opção" else "",
+                     style = MaterialTheme.typography.bodySmall)
+            } else if (result != null) {
+                Text("Última execução: ${seconds(result.seconds)} · ${result.candidates} opções · " +
+                     "${seconds(result.seconds / result.candidates)} por opção · ${result.inputTokens} tokens" +
+                     if (state.prefixCache) " · contexto reaproveitado" else "",
+                     style = MaterialTheme.typography.bodyMedium)
+            }
+            state.memory?.let { m ->
+                Text(
+                    "Memória do app: ${gb(m.appBytes)}" +
+                        (if (running != null || result != null) " (pico ${gb(state.peakAppBytes)})" else "") +
+                        " · livre no aparelho: ${gb(m.availBytes)} de ${gb(m.totalBytes)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (m.low) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (m.low) Text("Pouca memória livre: feche outros apps.", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+private fun seconds(s: Double) = if (s < 60) String.format(Locale.ROOT, "%.1f s", s)
+                                 else String.format(Locale.ROOT, "%d min %02d s", (s / 60).toInt(), (s % 60).toInt())
 
 @Composable
 private fun ModelCard(model: ModelState, vm: MainViewModel) {
@@ -242,13 +285,14 @@ private fun Bar(label: String, p: Double) {
 }
 
 @Composable
-private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onApply: (Int, Int) -> Unit) {
+private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onApply: (Int, Int, Boolean) -> Unit) {
     val cores = Runtime.getRuntime().availableProcessors()
     var threads by remember { mutableFloatStateOf(state.threads.toFloat()) }
     var ctx by remember { mutableStateOf(state.contextSize) }
+    var cache by remember { mutableStateOf(state.prefixCache) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = { onApply(threads.roundToInt(), ctx) }) { Text("Aplicar") } },
+        confirmButton = { TextButton(onClick = { onApply(threads.roundToInt(), ctx, cache) }) { Text("Aplicar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
         title = { Text("Ajustes") },
         text = {
@@ -262,7 +306,14 @@ private fun SettingsDialog(state: UiState, onDismiss: () -> Unit, onApply: (Int,
                         FilterChip(selected = ctx == value, onClick = { ctx = value }, label = { Text("$value") })
                     }
                 }
-                Box(Modifier.width(1.dp))
+                Row {
+                    Column(Modifier.weight(1f)) {
+                        Text("Reaproveitar o contexto entre as opções")
+                        Text("Bem mais rápido. Os resultados podem variar ligeiramente.",
+                             style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = cache, onCheckedChange = { cache = it })
+                }
             }
         },
     )

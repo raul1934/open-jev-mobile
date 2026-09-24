@@ -45,7 +45,15 @@ data class Prediction(val answers: List<Pair<String, Answer>>, val candidates: I
 class Predictor(private val handle: Long, private val head: Head) {
     private val maxLength = minOf(head.maxLength, Native.contextSize(handle))
 
-    fun predict(request: JsonValue, onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): Prediction {
+    /**
+     * With [prefixCache], tokens shared by every prompt of the request (the context) are
+     * computed once, tokens shared by one question's candidates once per question, and
+     * only each candidate's own tail is computed per candidate. The model state after a
+     * shared prefix (attention KV cache and recurrent state) is saved and restored, so
+     * every candidate still sees exactly its own full token sequence.
+     */
+    fun predict(request: JsonValue, prefixCache: Boolean = true,
+                onProgress: (done: Int, total: Int, step: String) -> Unit = { _, _, _ -> }): Prediction {
         val start = System.nanoTime()
         require(request is JsonObject && request["state"] != null && request["questions"] != null) {
             "request requires state and questions"
@@ -53,6 +61,7 @@ class Predictor(private val handle: Long, private val head: Head) {
         val records = Api.compileRequest(request["state"]!!, request["questions"])
         val prompts = records.map { Api.candidatePrompts(it) }
         val total = prompts.sumOf { it.size }
+        onProgress(0, total, "Preparando os prompts")
         // Tokenize everything first so an over-long prompt fails before any slow work.
         val tokens = prompts.map { group -> group.map { Native.tokenize(handle, head.promptPrefix + it + head.promptSuffix) } }
         val longest = tokens.flatten().maxOf { it.size }
@@ -61,17 +70,65 @@ class Predictor(private val handle: Long, private val head: Head) {
                 if (maxLength < head.maxLength) " (raise the context size in settings, up to ${head.maxLength})" else "")
         }
         var done = 0
-        onProgress(0, total)
+        val step = { text: String -> onProgress(done, total, text) }
+        val tick = { done++; Unit }
+        val ids = records.map { it.id }
+        val hidden = if (prefixCache) cachedHiddenStates(ids, tokens, step, tick)
+                     else tokens.mapIndexed { q, group ->
+                         group.mapIndexed { j, t ->
+                             step(optionStep(ids[q], j, group.size, t.size))
+                             Native.hiddenState(handle, t).also { tick() }
+                         }
+                     }
+        onProgress(done, total, "Calculando as probabilidades")
         val answers = records.mapIndexed { index, record ->
-            val scores = tokens[index].map { ids ->
-                val hidden = Native.hiddenState(handle, ids)
+            val scores = hidden[index].map { h ->
                 var sum = head.bias
-                for (i in hidden.indices) sum += head.weight[i] * hidden[i]
-                onProgress(++done, total)
+                for (i in h.indices) sum += head.weight[i] * h[i]
                 sum
             }
             record.id to Api.answer(record, Api.softmax(Api.logits(record, scores), head.temperature))
         }
         return Prediction(answers, total, tokens.flatten().sumOf { it.size }, (System.nanoTime() - start) / 1e9)
+    }
+
+    /** Longest shared token prefix, leaving at least one token per prompt to decode (its output is read). */
+    private fun commonPrefix(lists: List<IntArray>): Int {
+        var n = lists.minOf { it.size } - 1
+        for (ids in lists) {
+            var i = 0
+            while (i < n && ids[i] == lists[0][i]) i++
+            n = i
+        }
+        return n
+    }
+
+    private fun optionStep(id: String, j: Int, count: Int, tokens: Int) =
+        if (count == 1) "\"$id\": avaliando ($tokens tokens)" else "\"$id\": opção ${j + 1} de $count ($tokens tokens)"
+
+    private fun cachedHiddenStates(ids: List<String>, tokens: List<List<IntArray>>, step: (String) -> Unit,
+                                   tick: () -> Unit): List<List<FloatArray>> {
+        val shared = commonPrefix(tokens.flatten())
+        Native.reset(handle)
+        if (shared > 0) {
+            step("Lendo o contexto compartilhado ($shared tokens)")
+            Native.extend(handle, tokens[0][0].copyOfRange(0, shared), 0, false)
+            Native.saveState(handle, 0)
+        }
+        fun restoreShared() = if (shared > 0) Native.restoreState(handle, 0) else Native.reset(handle)
+        return tokens.mapIndexed { index, group ->
+            val own = maxOf(shared, commonPrefix(group))
+            if (index > 0) restoreShared()
+            if (own > shared) {
+                step("\"${ids[index]}\": lendo a pergunta (${own - shared} tokens)")
+                Native.extend(handle, group[0].copyOfRange(shared, own), shared, false)
+                if (group.size > 1) Native.saveState(handle, 1)
+            }
+            group.mapIndexed { j, tokens ->
+                if (j > 0) if (own > shared) Native.restoreState(handle, 1) else restoreShared()
+                step(optionStep(ids[index], j, group.size, tokens.size - own))
+                Native.extend(handle, tokens.copyOfRange(own, tokens.size), own, true)!!.also { tick() }
+            }
+        }
     }
 }

@@ -30,16 +30,25 @@ sealed interface ModelState {
 
 data class Example(val file: String, val json: String)
 
+data class RunProgress(val done: Int, val total: Int, val step: String, val startedAt: Long)
+
+/** appBytes: resident memory of the app (includes the model pages mapped from the file). */
+data class Memory(val appBytes: Long, val availBytes: Long, val totalBytes: Long, val low: Boolean)
+
 data class UiState(
     val model: ModelState = ModelState.Missing,
     val examples: List<Example> = emptyList(),
     val selected: String? = null,
     val requestText: String = "",
-    val running: Pair<Int, Int>? = null,
+    val running: RunProgress? = null,
+    val now: Long = 0,
+    val memory: Memory? = null,
+    val peakAppBytes: Long = 0,
     val result: Prediction? = null,
     val error: String? = null,
     val threads: Int = 4,
     val contextSize: Int = 2048,
+    val prefixCache: Boolean = true,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -48,14 +57,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(UiState(
         threads = prefs.getInt("threads", minOf(4, Runtime.getRuntime().availableProcessors())),
         contextSize = prefs.getInt("ctx", 2048),
+        prefixCache = prefs.getBoolean("prefixCache", true),
     ))
     val state: StateFlow<UiState> = _state
 
     private var handle = 0L
     private var predictor: Predictor? = null
 
+    private val activityManager = app.getSystemService(android.app.ActivityManager::class.java)
+
+    private fun readMemory(): Memory {
+        // VmRSS from /proc is cheap enough to poll; Debug.getMemoryInfo() takes tens of ms.
+        val rssKb = runCatching {
+            java.io.File("/proc/self/status").readLines().first { it.startsWith("VmRSS:") }
+                .split(Regex("\\s+"))[1].toLong()
+        }.getOrDefault(0L)
+        val info = android.app.ActivityManager.MemoryInfo().also { activityManager.getMemoryInfo(it) }
+        return Memory(rssKb * 1024, info.availMem, info.totalMem, info.lowMemory)
+    }
+
     init {
         loadExamples()
+        // Clock and memory for the status panel: every 250 ms while running, every 2 s otherwise.
+        viewModelScope.launch(Dispatchers.Default) {
+            while (true) {
+                val m = readMemory()
+                _state.update {
+                    it.copy(now = android.os.SystemClock.elapsedRealtime(), memory = m,
+                            peakAppBytes = if (it.running != null) maxOf(it.peakAppBytes, m.appBytes) else it.peakAppBytes)
+                }
+                delay(if (_state.value.running != null) 250 else 2000)
+            }
+        }
         viewModelScope.launch {
             withContext(Dispatchers.IO) { Native.init(app.applicationInfo.nativeLibraryDir) }
             when {
@@ -157,24 +190,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (store.isReady()) loadModel() else _state.update { it.copy(model = ModelState.Missing) }
     }
 
-    fun applySettings(threads: Int, contextSize: Int) {
+    fun applySettings(threads: Int, contextSize: Int, prefixCache: Boolean) {
         if (_state.value.running != null) return // the native context is in use
-        prefs.edit().putInt("threads", threads).putInt("ctx", contextSize).apply()
-        _state.update { it.copy(threads = threads, contextSize = contextSize) }
-        if (store.isReady()) viewModelScope.launch { loadModel() }
+        val reload = threads != _state.value.threads || contextSize != _state.value.contextSize
+        prefs.edit().putInt("threads", threads).putInt("ctx", contextSize).putBoolean("prefixCache", prefixCache).apply()
+        _state.update { it.copy(threads = threads, contextSize = contextSize, prefixCache = prefixCache) }
+        if (reload && store.isReady()) viewModelScope.launch { loadModel() }
+    }
+
+    /** Test hook: `--ei threads 2 --ez cache false` alongside `--es run <file>`. */
+    fun overrideSettings(threads: Int?, prefixCache: Boolean?) {
+        val s = _state.value
+        applySettings(threads ?: s.threads, s.contextSize, prefixCache ?: s.prefixCache)
     }
 
     fun run() {
         val p = predictor ?: return
         if (_state.value.running != null) return
-        _state.update { it.copy(running = 0 to 0, result = null, error = null) }
+        val started = android.os.SystemClock.elapsedRealtime()
+        _state.update { it.copy(running = RunProgress(0, 0, "Começando", started), now = started, result = null,
+                                error = null, peakAppBytes = it.memory?.appBytes ?: 0) }
         viewModelScope.launch {
             try {
                 val request = Json.parse(_state.value.requestText)
                 val result = withContext(Dispatchers.Default) {
-                    p.predict(request) { done, total -> _state.update { it.copy(running = done to total) } }
+                    p.predict(request, _state.value.prefixCache) { done, total, step ->
+                        _state.update { it.copy(running = RunProgress(done, total, step, started)) }
+                    }
                 }
-                android.util.Log.i("openjev", "prediction ${_state.value.selected} ${"%.1f".format(result.seconds)}s " +
+                android.util.Log.i("openjev", "prediction ${_state.value.selected} cache=${_state.value.prefixCache} threads=${_state.value.threads} ${"%.1f".format(result.seconds)}s " +
                     result.answers.joinToString { (id, a) -> "$id=" + a.probabilities.joinToString("/") { (k, v) -> "$k:$v" } })
                 _state.update { it.copy(result = result, running = null) }
             } catch (e: Throwable) {

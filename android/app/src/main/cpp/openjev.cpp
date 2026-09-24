@@ -34,6 +34,7 @@ struct Engine {
     int n_ctx = 0;
     std::vector<float> hidden;  // filled by capture_hidden during llama_decode
     bool captured = false;
+    std::vector<uint8_t> saved[2];  // prefix-cache slots (KV cache + recurrent state of seq 0)
 };
 
 // ggml eval callback: ask == true -> "do you want this tensor?"; ask == false -> it was computed.
@@ -44,6 +45,7 @@ bool capture_hidden(ggml_tensor * t, bool ask, void * user_data) {
     if (t->type != GGML_TYPE_F32 || t->ne[0] != e->n_embd) return true;
     // One row per output token; the last row is the last prompt token.
     const int64_t rows = ggml_nrows(t);
+    if (rows == 0) return true;  // a prefix-only decode has no outputs
     e->hidden.resize(e->n_embd);
     ggml_backend_tensor_get(t, e->hidden.data(), (rows - 1) * t->nb[1], e->n_embd * sizeof(float));
     e->captured = true;
@@ -138,26 +140,26 @@ Java_com_openjev_mobile_engine_Native_tokenize(JNIEnv * env, jobject, jlong hand
     return out;
 }
 
-extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_openjev_mobile_engine_Native_hiddenState(JNIEnv * env, jobject, jlong handle, jintArray jtokens) {
-    Engine * e = engine(handle);
+namespace {
+
+// Decodes tokens at positions [start, start + n) of seq 0. When want_hidden, the last
+// token is the only output and its result_norm row is returned; otherwise nothing is
+// output (used to fill the cache with a shared prefix).
+jfloatArray decode(JNIEnv * env, Engine * e, jintArray jtokens, int start, bool want_hidden) {
     const jsize n = env->GetArrayLength(jtokens);
-    if (n <= 0 || n > e->n_ctx) {
-        throw_java(env, "prompt has " + std::to_string(n) + " tokens; the limit is " + std::to_string(e->n_ctx));
+    if (n <= 0 || start + n > e->n_ctx) {
+        throw_java(env, "prompt has " + std::to_string(start + n) + " tokens; the limit is " + std::to_string(e->n_ctx));
         return nullptr;
     }
     std::vector<llama_token> tokens(n);
     env->GetIntArrayRegion(jtokens, 0, n, tokens.data());
-
-    // Each candidate is independent: drop the previous prompt's KV and recurrent state.
-    llama_memory_clear(llama_get_memory(e->ctx), true);
     llama_batch batch = llama_batch_init(n, 0, 1);
     for (int i = 0; i < n; i++) {
         batch.token[i] = tokens[i];
-        batch.pos[i] = i;
+        batch.pos[i] = start + i;
         batch.n_seq_id[i] = 1;
         batch.seq_id[i][0] = 0;
-        batch.logits[i] = i == n - 1;
+        batch.logits[i] = want_hidden && i == n - 1;
     }
     batch.n_tokens = n;
     e->captured = false;
@@ -167,6 +169,7 @@ Java_com_openjev_mobile_engine_Native_hiddenState(JNIEnv * env, jobject, jlong h
         throw_java(env, "llama_decode failed with code " + std::to_string(rc));
         return nullptr;
     }
+    if (!want_hidden) return nullptr;
     if (!e->captured) {
         throw_java(env, "the model graph produced no result_norm tensor");
         return nullptr;
@@ -174,6 +177,47 @@ Java_com_openjev_mobile_engine_Native_hiddenState(JNIEnv * env, jobject, jlong h
     jfloatArray out = env->NewFloatArray(e->n_embd);
     env->SetFloatArrayRegion(out, 0, e->n_embd, e->hidden.data());
     return out;
+}
+
+}  // namespace
+
+// Whole prompt from an empty cache.
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_openjev_mobile_engine_Native_hiddenState(JNIEnv * env, jobject, jlong handle, jintArray jtokens) {
+    Engine * e = engine(handle);
+    // Each candidate is independent: drop the previous prompt's KV and recurrent state.
+    llama_memory_clear(llama_get_memory(e->ctx), true);
+    return decode(env, e, jtokens, 0, true);
+}
+
+// Continue the cached sequence with more tokens (prefix cache).
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_openjev_mobile_engine_Native_extend(JNIEnv * env, jobject, jlong handle, jintArray jtokens,
+                                             jint start, jboolean want_hidden) {
+    return decode(env, engine(handle), jtokens, start, want_hidden);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_openjev_mobile_engine_Native_reset(JNIEnv *, jobject, jlong handle) {
+    llama_memory_clear(llama_get_memory(engine(handle)->ctx), true);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_openjev_mobile_engine_Native_saveState(JNIEnv *, jobject, jlong handle, jint slot) {
+    Engine * e = engine(handle);
+    auto & buf = e->saved[slot];
+    buf.resize(llama_state_seq_get_size(e->ctx, 0));
+    buf.resize(llama_state_seq_get_data(e->ctx, buf.data(), buf.size(), 0));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_openjev_mobile_engine_Native_restoreState(JNIEnv * env, jobject, jlong handle, jint slot) {
+    Engine * e = engine(handle);
+    const auto & buf = e->saved[slot];
+    llama_memory_clear(llama_get_memory(e->ctx), true);
+    if (buf.empty() || llama_state_seq_set_data(e->ctx, buf.data(), buf.size(), 0) != buf.size()) {
+        throw_java(env, "could not restore the cached prefix");
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL
